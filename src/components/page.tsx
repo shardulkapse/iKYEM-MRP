@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { SkeletonLines } from "./skeletons";
 
 export function PageHeader({ title, sub, actions }: { title: string; sub?: string; actions?: React.ReactNode }) {
   return (
@@ -10,9 +11,10 @@ export function PageHeader({ title, sub, actions }: { title: string; sub?: strin
 }
 
 // With Cache Components on, anything that reads the session or the database renders inside
-// a Suspense boundary. The header above stays in the instant static shell.
-export function Streamed({ children }: { children: React.ReactNode }) {
-  return <Suspense fallback={<div className="skeleton" />}>{children}</Suspense>;
+// a Suspense boundary. The header above stays in the instant static shell, and the fallback
+// is a skeleton shaped like what's coming.
+export function Streamed({ children, fallback }: { children: React.ReactNode; fallback?: React.ReactNode }) {
+  return <Suspense fallback={fallback ?? <SkeletonLines />}>{children}</Suspense>;
 }
 
 export function ComingNext({ what }: { what: string }) {
