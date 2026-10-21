@@ -5,3 +5,4 @@ export const WORKFLOW_LABEL = { hand: "Hand stitched", machine: "Machine stitche
 export const MATERIAL_KIND_LABEL = { leather: "Leather", cork: "Cork core", other: "Other" } as const;
 export const PAY_TYPE_LABEL = { daily: "Daily wage", piece: "Per piece", salary: "Salary" } as const;
 export const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"] as const;
+export const EXPENSE_CATEGORIES = ["Rent", "Electricity", "Transport", "Repairs", "Packing", "Other"] as const;

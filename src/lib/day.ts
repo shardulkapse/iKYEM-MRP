@@ -37,3 +37,6 @@ export function subWorkDays(day: string, n: number, workDays: number): string {
   for (let k = 0; k < n; ) { d = addDays(d, -1); if (isWorkDay(d, workDays)) k++; }
   return d;
 }
+
+// 0 = Sunday ... 6 = Saturday
+export const weekdayOf = (day: string) => asUTC(day).getUTCDay();

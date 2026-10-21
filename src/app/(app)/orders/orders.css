@@ -1,0 +1,16 @@
+/* Orders screen styles: the order and delivery line rows. Imported by src/app/(app)/orders/page.tsx. */
+@layer theme, base, components, utilities;
+@layer components {
+  .olines { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 6px; }
+  .oline { display: grid; grid-template-columns: 1.4fr 1fr 90px 120px 36px; gap: 6px; align-items: center; }
+  .oline.dl { grid-template-columns: 1.6fr 90px 80px 110px 130px; }
+  .oline.head { font-size: 12px; color: var(--muted); font-weight: 600; }
+  .oline .num { text-align: right; padding-right: 8px; }
+  .oline input, .oline select { border: 1px solid var(--line2); background: var(--panel); border-radius: 10px; height: 40px; padding: 0 10px; font: inherit; font-size: 14.5px; color: var(--ink); width: 100%; min-width: 0; }
+  .oline input:focus, .oline select:focus { outline: none; border-color: var(--field); box-shadow: 0 0 0 3px color-mix(in srgb, var(--field) 22%, transparent); }
+  .mnote { font-size: 12.5px; margin: 2px 0 4px; }
+  @media (max-width: 900px) {
+    .oline { grid-template-columns: 1fr 1fr 70px 90px 32px; }
+    .oline.dl { grid-template-columns: 1fr 60px 60px 80px 90px; font-size: 13px; }
+  }
+}

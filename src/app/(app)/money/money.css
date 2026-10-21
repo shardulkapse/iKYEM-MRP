@@ -1,0 +1,20 @@
+/* Money screen styles. Imported by src/app/(app)/money/page.tsx. */
+@layer theme, base, components, utilities; /* fixes layer order whichever stylesheet loads first */
+@layer components {
+  .sline { display: flex; justify-content: space-between; gap: 12px; padding: 11px 0; border-bottom: 1px solid var(--line); align-items: baseline; }
+  .sline b { text-align: right; white-space: nowrap; }
+  .sline b small { font-weight: 500; color: var(--muted); }
+  .sline.total { border-bottom: 0; border-top: 2px solid var(--ink); margin-top: 2px; font-size: 17px; }
+  .sline.total b { font-size: 21px; font-stretch: 112%; }
+  .sline.neg b { color: var(--cherry); }
+  .calc { display: grid; gap: 14px; }
+  .calc input { border: 1px solid var(--line2); background: var(--panel); border-radius: 10px; height: 42px; padding: 0 12px; font: inherit; font-size: 15px; color: var(--ink); width: 100%; }
+  .calc input:focus { outline: none; border-color: var(--field); box-shadow: 0 0 0 3px color-mix(in srgb, var(--field) 22%, transparent); }
+  .seam { position: relative; height: 14px; border-radius: 7px; background: var(--sunk); overflow: hidden; margin-top: 14px; }
+  .seam > i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--cherry); border-radius: 7px; transition: width 0.4s ease; }
+  .seam > i::before, .seam > i::after { content: ""; position: absolute; left: 5px; right: 5px; height: 2px; background: repeating-linear-gradient(90deg, var(--stitch) 0 5px, transparent 5px 9px); opacity: 0.9; }
+  .seam > i::before { top: 3px; }
+  .seam > i::after { bottom: 3px; background-position: 4px 0; }
+  .panel-head .hint { display: block; margin-top: 2px; }
+  @media (prefers-reduced-motion: reduce) { .seam > i { transition: none; } }
+}

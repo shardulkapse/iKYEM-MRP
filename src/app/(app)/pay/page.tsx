@@ -1,51 +1,284 @@
+import Link from "next/link";
 import { Field, FormNote } from "@/components/fields";
 import { FormDialog } from "@/components/form-dialog";
-import { ComingNext, PageHeader, Streamed } from "@/components/page";
-import { SkeletonList } from "@/components/skeletons";
+import { PageHeader, Streamed } from "@/components/page";
+import { SkeletonList, SkeletonTable, SkeletonTabs } from "@/components/skeletons";
+import { TabLinks } from "@/components/tab-links";
 import type { workers } from "@/db/schema";
 import { requireRole } from "@/lib/auth";
+import { todayInFactory } from "@/lib/dates";
+import { addDays, dayShort, isValidDay } from "@/lib/day";
 import { PAY_TYPE_LABEL, WEEKDAYS } from "@/lib/labels";
 import { formatRupees, paiseToInput } from "@/lib/money";
+import { lastPayday, nextPayday, payPeriod, paydayRows, recentAdvances, salaryRows, type PaydayRow } from "@/lib/pay-queries";
 import { getSettings, listWorkers } from "@/lib/setup-queries";
-import { saveWorker } from "./actions";
+import { deleteWagePayment, giveAdvance, payEveryone, paySalary, payWeekly, saveWorker } from "./actions";
 
 export const metadata = { title: "Pay" };
 
 type Worker = typeof workers.$inferSelect;
 
-export default function PayPage() {
+export default function PayPage({ searchParams }: PageProps<"/pay">) {
   return (
     <>
-      <PageHeader title="Pay" sub="Your team now. Paydays, month-end salaries and advances come next." />
-      <div className="grid" style={{ gap: 18 }}>
-        <Streamed fallback={<section className="panel"><SkeletonList rows={6} /></section>}><Team /></Streamed>
-        <ComingNext what="The weekly payday worked out from the daily sheets, month-end salary balances, and advances." />
-      </div>
+      <PageHeader title="Pay" sub="Weekly payday worked out from the daily sheets, month-end salaries, advances, and your team." />
+      <Streamed fallback={<><SkeletonTabs /><section className="panel"><SkeletonTable rows={6} cols={4} /></section></>}>
+        <PayBody searchParams={searchParams} />
+      </Streamed>
     </>
   );
 }
 
-async function Team() {
+async function PayBody({ searchParams }: { searchParams: PageProps<"/pay">["searchParams"] }) {
   await requireRole(["owner"]);
-  const [all, settings] = await Promise.all([listWorkers(), getSettings()]);
-  const payday = WEEKDAYS[settings.payWeekday];
+  const [params, today, settings] = await Promise.all([searchParams, todayInFactory(), getSettings()]);
+  const day = WEEKDAYS[settings.payWeekday];
+  const tabs = [
+    { key: "payday", label: `${day} payday` },
+    { key: "salary", label: "Month-end salary" },
+    { key: "advances", label: "Advances" },
+    { key: "team", label: "Team" },
+  ];
+  const tab = tabs.some((t) => t.key === params.tab) ? String(params.tab) : "payday";
+  const next = nextPayday(today, settings.payWeekday);
+  const askedPayday = typeof params.payday === "string" && isValidDay(params.payday) ? lastPayday(params.payday, settings.payWeekday) : next;
+  const payday = askedPayday > next ? next : askedPayday;
+  const month = typeof params.month === "string" && /^\d{4}-\d{2}$/.test(params.month) ? params.month : today.slice(0, 7);
+  return (
+    <>
+      <div className="tabbar-row">
+        <TabLinks base="/pay" current={tab} tabs={tabs} />
+        <AdvanceButton today={today} />
+      </div>
+      <Streamed key={`${tab}${payday}${month}`} fallback={<section className="panel"><SkeletonList rows={6} /></section>}>
+        {tab === "payday" ? <PaydayTab payday={payday} next={next} today={today} day={day} />
+          : tab === "salary" ? <SalaryTab month={month} today={today} day={day} />
+          : tab === "advances" ? <AdvancesTab today={today} />
+          : <TeamTab day={day} />}
+      </Streamed>
+    </>
+  );
+}
+
+/* ------------------------------------------------------------ payday */
+
+function detail(r: PaydayRow, day: string) {
+  const w = r.worker;
+  const base = w.payType === "daily" ? `${r.days} ${r.days === 1 ? "day" : "days"} × ${formatRupees(w.ratePaise)}`
+    : w.payType === "piece" ? `${r.pieces} pieces × ${formatRupees(w.ratePaise)}`
+    : `Weekly payout, comes off the month-end salary`;
+  return r.advances ? `${base}, less ${formatRupees(r.advances)} advance` : w.payType === "salary" && !w.weeklyPayoutPaise ? `No ${day} payout set` : base;
+}
+
+async function PaydayTab({ payday, next, today, day }: { payday: string; next: string; today: string; day: string }) {
+  const rows = await paydayRows(payday);
+  const { from, to } = payPeriod(payday);
+  const unpaid = rows.filter((r) => !r.paid && r.due > 0);
+  const toPay = unpaid.reduce((a, r) => a + r.due, 0);
+  const paid = rows.reduce((a, r) => a + (r.paid?.amountPaise ?? 0), 0);
+  const paidOn = payday <= today ? payday : today;
+  const groups = (["daily", "piece", "salary"] as const).map((k) => ({ k, rows: rows.filter((r) => r.worker.payType === k) })).filter((g) => g.rows.length);
+  return (
+    <>
+      <div className="periodbar">
+        <Link className="btn sm" href={`/pay?payday=${addDays(payday, -7)}`} scroll={false} aria-label="Previous payday">‹</Link>
+        <b>{day} {dayShort(payday)}</b>
+        {payday < next ? <Link className="btn sm" href={`/pay?payday=${addDays(payday, 7)}`} scroll={false} aria-label="Next payday">›</Link> : <span className="btn sm" aria-disabled="true">›</span>}
+        <span className="muted">Pays for {dayShort(from)} to {dayShort(to)}</span>
+        {payday !== next ? <Link className="btn sm" href="/pay" scroll={false}>Next payday</Link> : null}
+      </div>
+      <div className="strip plain">
+        <div className={toPay ? "alert" : ""}><b>{formatRupees(toPay)}</b><span>Still to pay ({unpaid.length})</span></div>
+        <div><b>{formatRupees(paid)}</b><span>Paid</span></div>
+      </div>
+      {!rows.length ? <section className="panel empty"><b>Nobody to pay</b>Add your team in the Team tab.</section> : (
+        <div className="grid">
+          {groups.map((g) => (
+            <section key={g.k} className="panel">
+              <h2>{PAY_TYPE_LABEL[g.k]}</h2>
+              <div className="tbl">
+                <table>
+                  <thead><tr><th>Name</th><th>How it&apos;s worked out</th><th className="num">Amount</th><th /></tr></thead>
+                  <tbody>
+                    {g.rows.map((r) => (
+                      <tr key={r.worker.id}>
+                        <td><b>{r.worker.name}</b>{r.worker.role ? <><br /><small className="muted">{r.worker.role}</small></> : null}</td>
+                        <td className="muted">{detail(r, day)}</td>
+                        <td className="num"><b>{formatRupees(r.paid ? r.paid.amountPaise : r.due)}</b>{r.paid && r.paid.amountPaise !== r.due ? <><br /><small className="muted">sheets now say {formatRupees(r.due)}</small></> : null}</td>
+                        <td className="num nw">
+                          {r.paid ? (
+                            <span className="row-actions" style={{ justifyContent: "flex-end" }}>
+                              <span className="chip done">Paid {dayShort(r.paid.paidOn)}</span>
+                              <UndoPayment id={r.paid.id} what={`${formatRupees(r.paid.amountPaise)} paid to ${r.worker.name}`} />
+                            </span>
+                          ) : r.due > 0 ? (
+                            <FormDialog title={`Pay ${r.worker.name}`} trigger="Pay" triggerClassName="btn sm primary" submitLabel="Mark paid" action={payWeekly}>
+                              <input type="hidden" name="workerId" value={r.worker.id} />
+                              <input type="hidden" name="payday" value={payday} />
+                              <FormNote>{detail(r, day)}: {formatRupees(r.due)}.</FormNote>
+                              <Field label="Amount paid (₹)"><input name="amount" inputMode="decimal" defaultValue={paiseToInput(r.due)} required /></Field>
+                              <Field label="Paid on"><input name="paidOn" type="date" defaultValue={paidOn} max={today} required /></Field>
+                              <Field label="Note" full><input name="note" /></Field>
+                            </FormDialog>
+                          ) : <span className="muted">Nothing due</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          ))}
+          {unpaid.length ? (
+            <div>
+              <FormDialog title={`Pay everyone for ${day} ${dayShort(payday)}`} trigger={`Mark everyone paid (${formatRupees(toPay)})`} triggerClassName="btn primary big" submitLabel="Mark all paid" action={payEveryone}>
+                <input type="hidden" name="payday" value={payday} />
+                <FormNote>Marks {unpaid.length} {unpaid.length === 1 ? "person" : "people"} paid at the amounts shown, {formatRupees(toPay)} in total, dated {dayShort(paidOn)}. Anyone you&apos;ve paid a different amount, pay one by one instead.</FormNote>
+              </FormDialog>
+            </div>
+          ) : null}
+          <p className="hint" style={{ margin: 0 }}>Amounts come from the daily sheets, so filling in a missed day before paying updates them. Once someone is marked paid, the amount you paid stays as recorded.</p>
+        </div>
+      )}
+    </>
+  );
+}
+
+function UndoPayment({ id, what }: { id: string; what: string }) {
+  return (
+    <FormDialog title="Undo this payment?" trigger="↺" triggerClassName="x" submitLabel="Undo payment" action={deleteWagePayment}>
+      <input type="hidden" name="id" value={id} />
+      <FormNote>{what} will be removed and show as still to pay.</FormNote>
+    </FormDialog>
+  );
+}
+
+/* ------------------------------------------------------------ month-end salary */
+
+async function SalaryTab({ month, today, day }: { month: string; today: string; day: string }) {
+  const rows = await salaryRows(month);
+  const [y, m] = month.split("-").map(Number);
+  const shift = (n: number) => new Date(Date.UTC(y, m - 1 + n, 1)).toISOString().slice(0, 7);
+  const label = new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString("en-IN", { month: "long", year: "numeric", timeZone: "UTC" });
+  const monthEnd = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+  const paidOn = monthEnd <= today ? monthEnd : today;
+  return (
+    <>
+      <div className="periodbar">
+        <Link className="btn sm" href={`/pay?tab=salary&month=${shift(-1)}`} scroll={false} aria-label="Previous month">‹</Link>
+        <b>{label}</b>
+        {shift(1) <= today.slice(0, 7) ? <Link className="btn sm" href={`/pay?tab=salary&month=${shift(1)}`} scroll={false} aria-label="Next month">›</Link> : <span className="btn sm" aria-disabled="true">›</span>}
+        <span className="muted">Salary left after {day} payouts and advances</span>
+      </div>
+      {!rows.length ? <section className="panel empty"><b>No salaried staff</b>Salaried people appear here.</section> : (
+        <div className="tbl card">
+          <table>
+            <thead><tr><th>Name</th><th className="num">Monthly salary</th><th className="num">{day} payouts</th><th className="num">Advances</th><th className="num">Balance to pay</th><th /></tr></thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.worker.id}>
+                  <td><b>{r.worker.name}</b>{r.worker.role ? <><br /><small className="muted">{r.worker.role}</small></> : null}</td>
+                  <td className="num">{formatRupees(r.salary)}</td>
+                  <td className="num">{r.weekly ? `− ${formatRupees(r.weekly)}` : "—"}</td>
+                  <td className="num">{r.advances ? `− ${formatRupees(r.advances)}` : "—"}</td>
+                  <td className={`num ${r.balance < 0 ? "bad" : ""}`}><b>{formatRupees(r.paid ? r.paid.amountPaise : r.balance)}</b></td>
+                  <td className="num nw">
+                    {r.paid ? (
+                      <span className="row-actions" style={{ justifyContent: "flex-end" }}>
+                        <span className="chip done">Paid {dayShort(r.paid.paidOn)}</span>
+                        <UndoPayment id={r.paid.id} what={`${label} salary of ${formatRupees(r.paid.amountPaise)} for ${r.worker.name}`} />
+                      </span>
+                    ) : r.balance > 0 ? (
+                      <FormDialog title={`${label} salary: ${r.worker.name}`} trigger="Pay salary" triggerClassName="btn sm primary" submitLabel="Mark paid" action={paySalary}>
+                        <input type="hidden" name="workerId" value={r.worker.id} />
+                        <input type="hidden" name="forMonth" value={month} />
+                        <FormNote>{formatRupees(r.salary)} salary, less {formatRupees(r.weekly)} in {day} payouts and {formatRupees(r.advances)} in advances.</FormNote>
+                        <Field label="Amount paid (₹)"><input name="amount" inputMode="decimal" defaultValue={paiseToInput(r.balance)} required /></Field>
+                        <Field label="Paid on"><input name="paidOn" type="date" defaultValue={paidOn} max={today} required /></Field>
+                        <Field label="Note" full><input name="note" /></Field>
+                      </FormDialog>
+                    ) : <span className="muted">Nothing left</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="hint" style={{ marginTop: 12 }}>Only {day} payouts actually marked paid come off. Someone who joins or leaves mid-month still shows the full salary here: adjust the amount when you pay.</p>
+    </>
+  );
+}
+
+/* ------------------------------------------------------------ advances */
+
+async function AdvanceButton({ today }: { today: string }) {
+  const people = (await listWorkers()).filter((w) => !w.leftOn || w.leftOn >= today);
+  if (!people.length) return null;
+  return (
+    <FormDialog title="Give an advance" trigger="Give an advance" triggerClassName="btn sm" submitLabel="Record advance" action={giveAdvance}>
+      <Field label="Person" full>
+        <select name="workerId" defaultValue="">
+          <option value="" disabled>Pick a person</option>
+          {people.map((w) => <option key={w.id} value={w.id}>{w.name} ({PAY_TYPE_LABEL[w.payType]})</option>)}
+        </select>
+      </Field>
+      <Field label="Amount (₹)"><input name="amount" inputMode="decimal" required /></Field>
+      <Field label="Given on"><input name="paidOn" type="date" defaultValue={today} max={today} required /></Field>
+      <Field label="Note" full><input name="note" placeholder="Reason" /></Field>
+      <FormNote>Daily-wage and piece-work advances come off the payday that covers the date given. Salaried advances come off that month&apos;s salary.</FormNote>
+    </FormDialog>
+  );
+}
+
+async function AdvancesTab({ today }: { today: string }) {
+  const rows = await recentAdvances(addDays(today, -120));
+  if (!rows.length) return <section className="panel empty"><b>No advances in the last four months</b>Use Give an advance when someone takes money before payday.</section>;
+  return (
+    <section className="panel">
+      <h2>Advances <small>last four months</small></h2>
+      <div className="tbl">
+        <table>
+          <thead><tr><th>Given on</th><th>Person</th><th>Comes off</th><th>Note</th><th className="num">Amount</th><th /></tr></thead>
+          <tbody>
+            {rows.map((a) => (
+              <tr key={a.id}>
+                <td className="nw">{dayShort(a.paidOn)}</td>
+                <td><b>{a.name}</b></td>
+                <td className="muted">{a.payType === "salary" ? "Month-end salary" : "That week's payday"}</td>
+                <td className="muted">{a.note ?? ""}</td>
+                <td className="num">{formatRupees(a.amountPaise)}</td>
+                <td className="num"><UndoPayment id={a.id} what={`The ${formatRupees(a.amountPaise)} advance to ${a.name}`} /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+/* ------------------------------------------------------------ team */
+
+async function TeamTab({ day }: { day: string }) {
+  const all = await listWorkers();
   const current = all.filter((w) => !w.leftOn);
   const left = all.filter((w) => w.leftOn);
   const payLine = (w: Worker) =>
     w.payType === "daily" ? `${formatRupees(w.ratePaise)} a day`
     : w.payType === "piece" ? `${formatRupees(w.ratePaise)} a piece`
-    : `${formatRupees(w.ratePaise)} a month${w.weeklyPayoutPaise ? `, ${formatRupees(w.weeklyPayoutPaise)} every ${payday}` : ""}`;
+    : `${formatRupees(w.ratePaise)} a month${w.weeklyPayoutPaise ? `, ${formatRupees(w.weeklyPayoutPaise)} every ${day}` : ""}`;
   const row = (w: Worker) => (
     <div key={w.id} className={w.leftOn ? "row archived" : "row"}>
-      <span><b>{w.name}</b>{w.role ? <span className="muted"> {w.role}</span> : null}<br /><small className="muted">{PAY_TYPE_LABEL[w.payType]}: {payLine(w)}{w.leftOn ? `. Left ${w.leftOn}` : ""}</small></span>
-      <span className="row-actions"><FormDialog title={`Edit ${w.name}`} trigger="Edit" action={saveWorker}><WorkerFields w={w} payday={payday} /></FormDialog></span>
+      <span><b>{w.name}</b>{w.role ? <span className="muted"> {w.role}</span> : null}<br /><small className="muted">{PAY_TYPE_LABEL[w.payType]}: {payLine(w)}{w.leftOn ? `. Left ${dayShort(w.leftOn)}` : ""}</small></span>
+      <span className="row-actions"><FormDialog title={`Edit ${w.name}`} trigger="Edit" action={saveWorker}><WorkerFields w={w} day={day} /></FormDialog></span>
     </div>
   );
   return (
     <section className="panel">
       <div className="panel-head">
         <h2>Team <small>{current.length} {current.length === 1 ? "person" : "people"}</small></h2>
-        <FormDialog title="New person" trigger="Add person" triggerClassName="btn sm primary" action={saveWorker}><WorkerFields payday={payday} /></FormDialog>
+        <FormDialog title="New person" trigger="Add person" triggerClassName="btn sm primary" action={saveWorker}><WorkerFields day={day} /></FormDialog>
       </div>
       {current.length ? <div className="list">{current.map(row)}</div> : <p className="muted" style={{ margin: 0 }}>Nobody added yet.</p>}
       {left.length ? <details className="more"><summary>People who have left ({left.length})</summary><div className="list">{left.map(row)}</div></details> : null}
@@ -53,7 +286,7 @@ async function Team() {
   );
 }
 
-function WorkerFields({ w, payday }: { w?: Worker; payday: string }) {
+function WorkerFields({ w, day }: { w?: Worker; day: string }) {
   return (
     <>
       <input type="hidden" name="id" value={w?.id ?? ""} />
@@ -63,7 +296,7 @@ function WorkerFields({ w, payday }: { w?: Worker; payday: string }) {
         <select name="payType" defaultValue={w?.payType ?? "daily"}>{Object.entries(PAY_TYPE_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
       </Field>
       <Field label="Rate (₹)" hint="Daily wage, rate per piece, or monthly salary."><input name="rate" inputMode="decimal" defaultValue={paiseToInput(w?.ratePaise)} required placeholder="550" /></Field>
-      <Field label={`${payday} payout (salaried only, ₹)`} hint="Comes off the month-end salary."><input name="weeklyPayout" inputMode="decimal" defaultValue={paiseToInput(w?.weeklyPayoutPaise)} placeholder="1000" /></Field>
+      <Field label={`${day} payout (salaried only, ₹)`} hint="Comes off the month-end salary."><input name="weeklyPayout" inputMode="decimal" defaultValue={paiseToInput(w?.weeklyPayoutPaise)} placeholder="1000" /></Field>
       <Field label="Started on"><input name="startedOn" type="date" defaultValue={w?.startedOn ?? ""} /></Field>
       <Field label="Left on" hint="Leave empty while they work here."><input name="leftOn" type="date" defaultValue={w?.leftOn ?? ""} /></Field>
       <FormNote>Nobody is tied to a stage. On the daily sheet you pick who did which work. Piece workers are paid for every piece logged against them, at any stage.</FormNote>

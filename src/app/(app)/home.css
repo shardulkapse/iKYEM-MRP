@@ -1,0 +1,20 @@
+/* Home screen styles. Imported by src/app/(app)/page.tsx. */
+@layer theme, base, components, utilities; /* fixes layer order whichever stylesheet loads first */
+@layer components {
+  .home-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 18px; }
+  .strip.score .hero b { color: #fff; }
+  .strip.score .score-date b { font-size: 19px; font-stretch: 112%; line-height: 1.3; }
+  a.row.arow { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 11px 10px; margin: 0 -10px; border-radius: 10px; color: inherit; text-decoration: none; border-bottom: 1px solid var(--line); }
+  a.row.arow:last-child { border-bottom: 0; }
+  a.row.arow:hover { background: var(--panel2); }
+  .flowlbl { font-size: 13.5px; font-weight: 680; margin: 4px 0 8px; }
+  .flow { display: flex; align-items: stretch; overflow-x: auto; padding: 4px 2px 12px; }
+  .flow .node { flex: 1 0 92px; position: relative; text-align: center; padding: 0 4px; }
+  .flow .node b { display: block; font-size: 21px; font-weight: 720; font-stretch: 116%; line-height: 1.2; }
+  .flow .node span { display: block; font-size: 12.5px; color: var(--muted); line-height: 1.25; }
+  .flow .node .dot { width: 32px; height: 32px; border-radius: 50%; margin: 0 auto 7px; background: var(--panel); border: 2px solid var(--line2); position: relative; z-index: 1; display: grid; place-items: center; font-size: 12px; font-weight: 720; color: var(--muted); }
+  .flow .node.has .dot { background: var(--cherry); border-color: var(--cherry); color: var(--stitch); }
+  .flow .node.end .dot { background: var(--ok); border-color: var(--ok); color: var(--panel); }
+  .flow .node + .node::before { content: ""; position: absolute; top: 15px; right: calc(50% + 16px); left: calc(-50% + 16px); height: 2px; background: repeating-linear-gradient(90deg, var(--cherry) 0 6px, transparent 6px 10px); }
+  @media (max-width: 900px) { .home-grid { grid-template-columns: 1fr; } }
+}
