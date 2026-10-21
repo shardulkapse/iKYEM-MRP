@@ -2,7 +2,8 @@ import "server-only";
 import { asc, eq, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { daySheets, loanPayments, loans, workers } from "@/db/schema";
-import { addDays } from "@/lib/day";
+import { addDays, isWorkDay } from "@/lib/day";
+import { getSettings } from "@/lib/setup-queries";
 
 /* ------------------------------------------------------------ period figures */
 
@@ -155,14 +156,16 @@ export async function costPerBall(today: string) {
 /* ------------------------------------------------------------ break-even inputs */
 
 export async function breakEvenDefaults(today: string) {
-  const [ws, exp, emi, cost] = await Promise.all([
+  const [ws, exp, emi, cost, settings] = await Promise.all([
     db.select().from(workers),
     db.execute<{ v: string }>(sql`select coalesce(sum(amount_paise), 0) as v from expenses where spent_on > ${addDays(today, -90)} and spent_on <= ${today}`),
     db.select({ v: sql<string>`coalesce(sum(${loans.emiPaise}), 0)` }).from(loans),
     costPerBall(today),
+    getSettings(),
   ]);
   const active = ws.filter((w) => !w.leftOn || w.leftOn >= today);
-  const workDaysInMonth = 26;
+  let workDaysInMonth = 0;
+  for (let d = today.slice(0, 7) + "-01"; d.slice(0, 7) === today.slice(0, 7); d = addDays(d, 1)) if (isWorkDay(d, settings.weeklyOff)) workDaysInMonth++;
   const salaries = active.filter((w) => w.payType === "salary").reduce((a, w) => a + w.ratePaise, 0);
   const dailyWages = active.filter((w) => w.payType === "daily").reduce((a, w) => a + w.ratePaise * workDaysInMonth * 0.92, 0); // ~92% attendance
   const piecePerBall = active.filter((w) => w.payType === "piece").reduce((a, w) => a + w.ratePaise, 0);

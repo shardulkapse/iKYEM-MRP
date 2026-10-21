@@ -52,8 +52,8 @@ export async function materialCards(today: string): Promise<MaterialCard[]> {
     const used = usedBy.get(m.id) ?? 0;
     const perDay = m.kind !== "other" && days && used ? used / days : null;
     const coverDays = perDay ? onHand / perDay : null;
-    const runsOut = coverDays != null ? addWorkDays(today, Math.max(0, Math.floor(coverDays)), settings.workDays) : null;
-    const buyBy = runsOut ? subWorkDays(runsOut, m.leadDays, settings.workDays) : null;
+    const runsOut = coverDays != null ? addWorkDays(today, Math.max(0, Math.floor(coverDays)), settings.weeklyOff) : null;
+    const buyBy = runsOut ? subWorkDays(runsOut, m.leadDays, settings.weeklyOff) : null;
     const status: MaterialStatus =
       m.kind === "other" ? "ok"
       : onHand <= 0 || (buyBy && buyBy <= today) ? "now"

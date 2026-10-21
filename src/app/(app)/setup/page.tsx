@@ -5,6 +5,7 @@ import { PageHeader, Streamed } from "@/components/page";
 import { SkeletonLines, SkeletonList } from "@/components/skeletons";
 import type { ballTypes, grades, materials, suppliers } from "@/db/schema";
 import { requireRole } from "@/lib/auth";
+import { workWeekText } from "@/lib/day";
 import { COLOUR_LABEL, CONSTRUCTION_LABEL, MATERIAL_KIND_LABEL, WEEKDAYS, WORKFLOW_LABEL } from "@/lib/labels";
 import { getSettings, listBallTypes, listGrades, listMaterials, listSuppliers } from "@/lib/setup-queries";
 import { saveBallType, saveGrade, saveMaterial, saveSettings, saveSupplier } from "./actions";
@@ -154,18 +155,22 @@ async function Settings() {
   return (
     <>
       <dl className="kv">
-        <dt>Working days</dt><dd>{s.workDays === 7 ? "Every day" : "Monday to Saturday"}</dd>
-        <dt>Payday</dt><dd>Every {WEEKDAYS[s.payWeekday]}</dd>
+        <dt>Working days</dt><dd>{workWeekText(s.weeklyOff)}</dd>
+        <dt>Payday</dt><dd>Every {WEEKDAYS[s.payWeekday]}, for the work week {s.weeklyOff == null ? "before it" : `${WEEKDAYS[(s.weeklyOff + 1) % 7]} to ${WEEKDAYS[(s.weeklyOff + 6) % 7]}`}</dd>
         <dt>Factory time zone</dt><dd>India (IST)</dd>
       </dl>
       <div style={{ marginTop: 14 }}>
         <FormDialog title="Factory settings" trigger="Edit settings" action={saveSettings}>
-          <Field label="Working days">
-            <select name="workDays" defaultValue={s.workDays}><option value={6}>Monday to Saturday</option><option value={7}>Every day</option></select>
+          <Field label="Weekly holiday" hint="The day the factory is shut every week.">
+            <select name="weeklyOff" defaultValue={s.weeklyOff ?? ""}>
+              {WEEKDAYS.map((d, i) => <option key={d} value={i}>{d}</option>)}
+              <option value="">None, open every day</option>
+            </select>
           </Field>
           <Field label="Payday">
             <select name="payWeekday" defaultValue={s.payWeekday}>{WEEKDAYS.map((d, i) => <option key={d} value={i}>{d}</option>)}</select>
           </Field>
+          <FormNote>The work week runs from the day after the holiday to the day before it. A payday pays for the latest work week that has ended by then, so with Wednesday off a Tuesday payday pays Thursday to that Tuesday.</FormNote>
         </FormDialog>
       </div>
     </>

@@ -2,7 +2,7 @@ import "server-only";
 import { and, asc, desc, eq, gte, isNotNull, lte, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { attendance, wagePayments, workEntries, workers } from "@/db/schema";
-import { addDays, weekdayOf } from "@/lib/day";
+import { addDays, isWorkDay, weekdayOf } from "@/lib/day";
 
 /* ------------------------------------------------------------ paydays */
 
@@ -15,8 +15,20 @@ export function nextPayday(today: string, payWeekday: number): string {
   const last = lastPayday(today, payWeekday);
   return last === today ? last : addDays(last, 7);
 }
-// A payday pays for the seven days before it: Tuesday 20 pays Tuesday 13 to Monday 19.
-export const payPeriod = (payday: string) => ({ from: addDays(payday, -7), to: addDays(payday, -1) });
+// A payday pays for the factory's latest work week that has ended by then. The work week ends on
+// the day before the weekly holiday, so with Wednesday off a Tuesday payday pays Thursday to that
+// Tuesday, and a Wednesday or Thursday payday pays the Thursday-to-Tuesday just gone.
+// With no weekly holiday it pays the seven days before the payday.
+// from..to is always seven days (it includes the holiday, in case anyone worked it); firstDay is
+// the first working day, for showing the period.
+export function payPeriod(payday: string, weeklyOff: number | null) {
+  if (weeklyOff == null) return { from: addDays(payday, -7), to: addDays(payday, -1), firstDay: addDays(payday, -7) };
+  const lastDay = (weeklyOff + 6) % 7;
+  let to = payday;
+  while (weekdayOf(to) !== lastDay) to = addDays(to, -1);
+  const from = addDays(to, -6);
+  return { from, to, firstDay: isWorkDay(from, weeklyOff) ? from : addDays(from, 1) };
+}
 
 type Worker = typeof workers.$inferSelect;
 const employedBetween = (w: Worker, from: string, to: string) => (!w.startedOn || w.startedOn <= to) && (!w.leftOn || w.leftOn >= from);
@@ -26,12 +38,12 @@ export type PaydayRow = {
   paid: { id: string; amountPaise: number; paidOn: string } | null;
 };
 
-// What each person is owed on a payday, worked out from the daily sheets in the week before it.
+// What each person is owed on a payday, worked out from the daily sheets in its work week.
 // Daily wage: days present (half days count 0.5) × rate. Per piece: every good piece logged
 // against them at any stage × rate. Advances given that week come off. Salaried staff get their
 // fixed weekly payout, and their advances come off the month-end salary instead.
-export async function paydayRows(payday: string): Promise<PaydayRow[]> {
-  const { from, to } = payPeriod(payday);
+export async function paydayRows(payday: string, weeklyOff: number | null): Promise<PaydayRow[]> {
+  const { from, to } = payPeriod(payday, weeklyOff);
   const [ws, att, pieces, adv, paid] = await Promise.all([
     db.select().from(workers).orderBy(asc(workers.sortOrder), asc(workers.name)),
     db.select({ workerId: attendance.workerId, days: sql<string>`sum(case ${attendance.status} when 'present' then 1 when 'half' then 0.5 else 0 end)` })

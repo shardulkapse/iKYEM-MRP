@@ -15,5 +15,5 @@ export const listWorkers = () => db.select().from(workers).orderBy(sql`${workers
 
 export async function getSettings() {
   const [row] = await db.select().from(factorySettings);
-  return row ?? { id: 1, workDays: 6, payWeekday: 2 };
+  return row ?? { id: 1, weeklyOff: 0 as number | null, payWeekday: 2 };
 }

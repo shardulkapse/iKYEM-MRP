@@ -167,7 +167,8 @@ export async function setArchived(fd: FormData): Promise<void> {
 /* ------------------------------------------------------ factory settings */
 
 const settingsSchema = z.object({
-  workDays: z.coerce.number().pipe(z.union([z.literal(6), z.literal(7)])),
+  // "" = open every day, otherwise the day of the week the factory is shut
+  weeklyOff: z.union([z.literal("").transform(() => null), z.coerce.number().int().min(0).max(6)]),
   payWeekday: z.coerce.number().int().min(0).max(6),
 });
 

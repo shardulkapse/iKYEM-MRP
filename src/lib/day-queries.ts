@@ -13,7 +13,7 @@ export type AttendanceStatus = "present" | "half" | "absent";
 export type DayData = {
   day: string;
   today: string;
-  workDays: number;
+  weeklyOff: number | null;
   sheet: { exists: boolean; closed: boolean; updatedAt: string | null };
   types: { id: string; name: string; colour: string; construction: Construction; workflow: Workflow }[];
   grades: { id: string; name: string }[];
@@ -70,14 +70,14 @@ export async function loadDay(day: string, today: string): Promise<DayData> {
   const missing: string[] = [];
   if (first) {
     const from = first > addDays(today, -60) ? first : addDays(today, -60);
-    for (let d = from; d < today; d = addDays(d, 1)) if (isWorkDay(d, settings.workDays) && !filled.has(d)) missing.push(d);
+    for (let d = from; d < today; d = addDays(d, 1)) if (isWorkDay(d, settings.weeklyOff) && !filled.has(d)) missing.push(d);
   }
 
   const sheet = sheetRows[0];
   return {
     day,
     today,
-    workDays: settings.workDays,
+    weeklyOff: settings.weeklyOff,
     sheet: { exists: !!sheet, closed: sheet?.closed ?? false, updatedAt: sheet ? sheet.updatedAt.toISOString() : null },
     types: typeRows.filter((t) => !t.archivedAt || usedTypes.has(t.id)).map((t) => ({ id: t.id, name: t.name, colour: t.colour, construction: t.construction, workflow: t.workflow })),
     grades: gradeRows.filter((g) => !g.archivedAt || usedGrades.has(g.id)).map((g) => ({ id: g.id, name: g.name })),

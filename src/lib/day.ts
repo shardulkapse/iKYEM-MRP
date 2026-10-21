@@ -13,9 +13,10 @@ export function isValidDay(day: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(day) && !Number.isNaN(asUTC(day).getTime()) && asUTC(day).toISOString().slice(0, 10) === day;
 }
 
-// workDays 6 = Monday to Saturday (Sunday off), 7 = every day
-export function isWorkDay(day: string, workDays: number): boolean {
-  return workDays >= 7 || asUTC(day).getUTCDay() !== 0;
+// weeklyOff is the one day a week the factory is shut (0 = Sunday … 6 = Saturday), or null when it
+// opens every day. iKYEM: 3, Wednesday off, so the working week runs Thursday to Tuesday.
+export function isWorkDay(day: string, weeklyOff: number | null): boolean {
+  return weeklyOff == null || asUTC(day).getUTCDay() !== weeklyOff;
 }
 
 export function dayLong(day: string): string {
@@ -26,16 +27,23 @@ export function dayShort(day: string): string {
   return asUTC(day).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
 }
 
-// Count forward/back over working days only (Sundays skipped on a 6-day week).
-export function addWorkDays(day: string, n: number, workDays: number): string {
+// Count forward/back over working days only (the weekly holiday is skipped).
+export function addWorkDays(day: string, n: number, weeklyOff: number | null): string {
   let d = day;
-  for (let k = 0; k < n; ) { d = addDays(d, 1); if (isWorkDay(d, workDays)) k++; }
+  for (let k = 0; k < n; ) { d = addDays(d, 1); if (isWorkDay(d, weeklyOff)) k++; }
   return d;
 }
-export function subWorkDays(day: string, n: number, workDays: number): string {
+export function subWorkDays(day: string, n: number, weeklyOff: number | null): string {
   let d = day;
-  for (let k = 0; k < n; ) { d = addDays(d, -1); if (isWorkDay(d, workDays)) k++; }
+  for (let k = 0; k < n; ) { d = addDays(d, -1); if (isWorkDay(d, weeklyOff)) k++; }
   return d;
+}
+
+const WEEKDAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+// "Thursday to Tuesday, Wednesday off" or "Every day"
+export function workWeekText(weeklyOff: number | null): string {
+  if (weeklyOff == null) return "Every day";
+  return `${WEEKDAY_NAMES[(weeklyOff + 1) % 7]} to ${WEEKDAY_NAMES[(weeklyOff + 6) % 7]}, ${WEEKDAY_NAMES[weeklyOff]} off`;
 }
 
 // 0 = Sunday ... 6 = Saturday

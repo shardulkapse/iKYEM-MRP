@@ -52,11 +52,11 @@ const audit = {
 
 export const factorySettings = pgTable("factory_settings", {
   id: smallint("id").primaryKey().default(1),
-  workDays: smallint("work_days").notNull().default(6),    // 6 = Monday to Saturday, 7 = every day
+  weeklyOff: smallint("weekly_off").default(0),            // the day the factory is shut, 0 = Sunday … 6 = Saturday; null = open every day
   payWeekday: smallint("pay_weekday").notNull().default(2), // 0 = Sunday ... 2 = Tuesday
 }, (t) => [
   check("single_row", sql`${t.id} = 1`),
-  check("work_days_valid", sql`${t.workDays} in (6, 7)`),
+  check("weekly_off_valid", sql`${t.weeklyOff} between 0 and 6`),
   check("pay_weekday_valid", sql`${t.payWeekday} between 0 and 6`),
 ]);
 

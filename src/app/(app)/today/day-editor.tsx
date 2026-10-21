@@ -261,7 +261,7 @@ export function DayEditor({ data }: { data: DayData }) {
       <h2 className="dayh">
         {dayLong(data.day)}
         {isToday ? <span className="chip good">Today</span> : null}
-        {!isWorkDay(data.day, data.workDays) ? <span className="chip draft">Holiday</span> : null}
+        {!isWorkDay(data.day, data.weeklyOff) ? <span className="chip draft">Holiday</span> : null}
         {data.sheet.exists ? <span className="chip draft">Saved before</span> : null}
         {dirty ? <span className="dirty">Unsaved changes</span> : null}
       </h2>
@@ -304,7 +304,7 @@ export function DayEditor({ data }: { data: DayData }) {
               </div>
             ))}
           </div>
-        ) : <p className="hint" style={{ margin: 0 }}>Add your team on the Pay page first.</p>}
+        ) : <p className="hint" style={{ margin: 0 }}>Add your team on the Team page first.</p>}
       </section>
 
       <div className="stations">

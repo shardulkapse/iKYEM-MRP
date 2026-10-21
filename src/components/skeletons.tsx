@@ -17,9 +17,9 @@ function Busy({ children, className }: { children: React.ReactNode; className?: 
 
 const range = (n: number) => Array.from({ length: n }, (_, i) => i);
 
-export function SkeletonStrip({ cells = 4 }: { cells?: number }) {
+export function SkeletonStrip({ cells = 4, plain = false }: { cells?: number; plain?: boolean }) {
   return (
-    <Busy className="strip score">
+    <Busy className={plain ? "strip plain" : "strip score"}>
       {range(cells).map((i) => (
         <div key={i}><Sk w="45%" h={32} /><Sk w="70%" h={12} style={{ marginTop: 8 }} /></div>
       ))}
@@ -111,5 +111,17 @@ export function SkeletonDay() {
         ))}
       </div>
     </Busy>
+  );
+}
+
+// A row of labelled dropdowns (Team: person and task pickers), then a period bar.
+export function SkeletonPickers({ pickers = 1 }: { pickers?: number }) {
+  return (
+    <div aria-hidden="true">
+      <div className="pickers">
+        {range(pickers).map((i) => <span key={i}><Sk w={60} h={11} /><Sk w={230} h={38} r={10} style={{ marginTop: 6 }} /></span>)}
+      </div>
+      <div className="periodbar"><Sk w={250} h={34} r={10} /><Sk w={32} h={32} r={9} /><Sk w={120} h={18} /><Sk w={32} h={32} r={9} /></div>
+    </div>
   );
 }

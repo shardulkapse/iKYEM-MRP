@@ -411,7 +411,7 @@ async function BreakEvenTab({ today }: { today: string }) {
     day <= month.to;
     day = new Date(Date.parse(day) + 86400000).toISOString().slice(0, 10)
   )
-    if (isWorkDay(day, settings.workDays)) workDays++;
+    if (isWorkDay(day, settings.weeklyOff)) workDays++;
   const fixed = d.salaries + d.dailyWages + d.expensesMonthly + d.emi;
   const fixedNote = `Salaries ${formatRupees(d.salaries)}, daily wages about ${formatRupees(Math.round(d.dailyWages))}, other expenses about ${formatRupees(Math.round(d.expensesMonthly))}, loan EMI ${formatRupees(d.emi)}.`;
   const days = sheetDays[0]?.n ?? 0;

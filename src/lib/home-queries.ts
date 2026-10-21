@@ -20,7 +20,7 @@ export type Alert = { tone: "bad" | "warn"; text: string; sub: string; href: str
 const daysBetween = (a: string, b: string) => Math.round((Date.parse(b) - Date.parse(a)) / 86400000);
 
 // Working days with no daily sheet, from the first sheet ever (at most 60 days back) to yesterday.
-export async function missingDays(today: string, workDays: number): Promise<string[]> {
+export async function missingDays(today: string, weeklyOff: number | null): Promise<string[]> {
   const [[first], recent] = await Promise.all([
     db.select({ d: sql<string | null>`min(${daySheets.day})::text` }).from(daySheets),
     db.select({ day: daySheets.day }).from(daySheets).where(and(gte(daySheets.day, addDays(today, -60)), lte(daySheets.day, today))),
@@ -28,7 +28,7 @@ export async function missingDays(today: string, workDays: number): Promise<stri
   if (!first?.d) return [];
   const filled = new Set(recent.map((r) => r.day));
   const out: string[] = [];
-  for (let d = first.d > addDays(today, -60) ? first.d : addDays(today, -60); d < today; d = addDays(d, 1)) if (isWorkDay(d, workDays) && !filled.has(d)) out.push(d);
+  for (let d = first.d > addDays(today, -60) ? first.d : addDays(today, -60); d < today; d = addDays(d, 1)) if (isWorkDay(d, weeklyOff) && !filled.has(d)) out.push(d);
   return out;
 }
 
@@ -41,10 +41,10 @@ export async function homeData(today: string, owner: boolean) {
   const [cards, orders, missing, negatives, nextRows, lastRows] = await Promise.all([
     materialCards(today),
     homeOrders(),
-    missingDays(today, settings.workDays),
+    missingDays(today, settings.weeklyOff),
     loadNegatives(),
-    owner ? paydayRows(next) : Promise.resolve([]),
-    owner && last !== next ? paydayRows(last) : Promise.resolve([]),
+    owner ? paydayRows(next, settings.weeklyOff) : Promise.resolve([]),
+    owner && last !== next ? paydayRows(last, settings.weeklyOff) : Promise.resolve([]),
   ]);
 
   const alerts: Alert[] = [];

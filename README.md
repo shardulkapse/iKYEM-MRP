@@ -53,7 +53,7 @@ then every push to `main` deploys.
 | | Owner | Manager |
 |---|---|---|
 | Home, Today, Orders, Stock | ✓ | ✓ |
-| Pay, Money, Setup | ✓ | |
+| Team, Pay, Money, Setup | ✓ | |
 
 The proxy (`src/proxy.ts`) redirects people early, but the real protection is `requireRole()` in every
 server component, action and route handler that reads or writes data.
