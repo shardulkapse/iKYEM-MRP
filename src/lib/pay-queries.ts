@@ -3,6 +3,7 @@ import { and, asc, desc, eq, gte, isNotNull, lte, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { attendance, daySheets, wagePayments, workEntries, workers } from "@/db/schema";
 import { addDays, isWorkDay, weekdayOf } from "@/lib/day";
+import { paging } from "@/lib/paging";
 
 /* ------------------------------------------------------------ paydays */
 
@@ -111,11 +112,17 @@ export async function salaryRows(month: string): Promise<SalaryRow[]> {
 
 /* ------------------------------------------------------------ advances */
 
-export async function recentAdvances(since: string) {
-  return db
+// Every advance, newest first, a page at a time.
+export async function advancesPage(page: unknown) {
+  const [count] = await db.select({ n: sql<number>`count(*)::int` }).from(wagePayments).where(eq(wagePayments.kind, "advance"));
+  const p = paging(page, count?.n ?? 0);
+  const rows = await db
     .select({ id: wagePayments.id, paidOn: wagePayments.paidOn, amountPaise: wagePayments.amountPaise, note: wagePayments.note, name: workers.name, payType: workers.payType })
     .from(wagePayments)
     .innerJoin(workers, eq(workers.id, wagePayments.workerId))
-    .where(and(eq(wagePayments.kind, "advance"), gte(wagePayments.paidOn, since)))
-    .orderBy(desc(wagePayments.paidOn), desc(wagePayments.createdAt));
+    .where(eq(wagePayments.kind, "advance"))
+    .orderBy(desc(wagePayments.paidOn), desc(wagePayments.createdAt), desc(wagePayments.id))
+    .limit(p.size)
+    .offset(p.offset);
+  return { rows, paging: p };
 }

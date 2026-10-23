@@ -1,6 +1,7 @@
 import { Field, FormNote } from "@/components/fields";
 import { FormDialog } from "@/components/form-dialog";
 import { PageHeader, Streamed } from "@/components/page";
+import { Pager } from "@/components/pager";
 import { SkeletonCards, SkeletonTable, SkeletonTabs } from "@/components/skeletons";
 import { ReadyStockTable, WipTable } from "@/components/stock-tables";
 import { TabLinks } from "@/components/tab-links";
@@ -46,7 +47,7 @@ async function StockBody({ searchParams }: { searchParams: PageProps<"/stock">["
         {owner ? <PurchaseButton /> : null}
       </div>
       <Streamed key={tab} fallback={tab === "materials" ? <SkeletonCards /> : <section className="panel"><SkeletonTable rows={5} cols={6} /></section>}>
-        {tab === "ready" ? <ReadyTab owner={owner} /> : tab === "materials" ? <MaterialsTab owner={owner} /> : tab === "yield" ? <YieldTab owner={owner} /> : <PurchasesTab owner={owner} />}
+        {tab === "ready" ? <ReadyTab owner={owner} /> : tab === "materials" ? <MaterialsTab owner={owner} /> : tab === "yield" ? <YieldTab owner={owner} /> : <PurchasesTab owner={owner} page={params.page} />}
       </Streamed>
     </>
   );
@@ -194,12 +195,12 @@ async function PurchaseButton({ materialId, label = "Record purchase", primary }
   );
 }
 
-async function PurchasesTab({ owner }: { owner: boolean }) {
-  const rows = await listPurchases();
+async function PurchasesTab({ owner, page }: { owner: boolean; page: string | string[] | undefined }) {
+  const { rows, paging: pg } = await listPurchases(page);
   if (!rows.length) return <section className="panel empty"><b>No purchases yet</b>Record every leather, cork and other material purchase with its supplier and price.</section>;
   return (
     <section className="panel">
-      <h2>Purchases <small>latest {rows.length}</small></h2>
+      <h2>Purchases <small>newest first</small></h2>
       <div className="tbl">
         <table>
           <thead><tr><th>Arrived</th><th>Material</th><th>Supplier</th><th className="num">Quantity</th>{owner ? <><th className="num">Price</th><th className="num">Total</th><th /></> : null}</tr></thead>
@@ -227,6 +228,7 @@ async function PurchasesTab({ owner }: { owner: boolean }) {
           </tbody>
         </table>
       </div>
+      <Pager p={pg} href="/stock?tab=purchases" noun={["purchase", "purchases"]} />
     </section>
   );
 }

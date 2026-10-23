@@ -2,6 +2,7 @@ import "server-only";
 import { cache } from "react";
 import { and, asc, desc, eq, gte, isNull, lte, sql } from "drizzle-orm";
 import { db } from "@/db";
+import { paging } from "@/lib/paging";
 import { daySheets, materialOnHand, materials, purchases, suppliers } from "@/db/schema";
 import { addDays, addWorkDays, subWorkDays } from "@/lib/day";
 import { getSettings } from "@/lib/setup-queries";
@@ -131,8 +132,11 @@ export async function recentCutting(limit = 25) {
   return r.rows;
 }
 
-export async function listPurchases(limit = 100) {
-  return db
+// Every purchase, newest first, a page at a time.
+export async function listPurchases(page: unknown) {
+  const [count] = await db.select({ n: sql<number>`count(*)::int` }).from(purchases);
+  const p = paging(page, count?.n ?? 0);
+  const rows = await db
     .select({
       id: purchases.id, receivedOn: purchases.receivedOn, qty: purchases.qty, pricePaise: purchases.pricePaise, note: purchases.note,
       material: materials.name, kind: materials.kind, colour: materials.colour, unit: materials.unit, supplier: suppliers.name,
@@ -140,8 +144,10 @@ export async function listPurchases(limit = 100) {
     .from(purchases)
     .innerJoin(materials, eq(materials.id, purchases.materialId))
     .leftJoin(suppliers, eq(suppliers.id, purchases.supplierId))
-    .orderBy(desc(purchases.receivedOn), desc(purchases.createdAt))
-    .limit(limit);
+    .orderBy(desc(purchases.receivedOn), desc(purchases.createdAt), desc(purchases.id))
+    .limit(p.size)
+    .offset(p.offset);
+  return { rows, paging: p };
 }
 
 // cache(): several "Bought" buttons on one page share a single lookup per request.

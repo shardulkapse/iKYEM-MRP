@@ -136,6 +136,15 @@
   details.more[open] summary::before { content: "▾ "; }
 
   /* dialogs and forms */
+  /* Page numbers under long lists (src/components/pager.tsx) */
+  .pager { display: flex; justify-content: space-between; align-items: center; gap: 10px 16px; flex-wrap: wrap; margin-top: 12px; font-size: 13.5px; }
+  .pager .pages { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+  .pager .btn.sm { min-width: 34px; justify-content: center; text-decoration: none; }
+  .pager .btn.current { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  .pager [aria-disabled="true"] { opacity: .4; pointer-events: none; }
+  .pager .gap { color: var(--muted); padding: 0 4px; }
+  .panel > .pager { margin-top: 14px; }
+
   /* A dialog opened from a table cell inherits that cell's text-align, nowrap and font size; reset them. */
   dialog.dlg { text-align: left; white-space: normal; font-size: 15px; font-weight: 400; line-height: 1.5; font-stretch: 100%; margin: auto; border: 1px solid var(--line); border-radius: 18px; padding: 0; background: var(--panel); color: var(--ink); width: min(640px, calc(100vw - 24px)); max-height: calc(100% - 48px); box-shadow: 0 24px 60px rgba(10, 15, 12, 0.28); }
   dialog.dlg[open] { animation: dlg-pop 0.18s ease-out; }

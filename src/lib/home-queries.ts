@@ -55,7 +55,7 @@ export async function homeData(today: string, owner: boolean) {
   for (const o of orders.open.filter((o) => o.dueOn >= today && daysBetween(today, o.dueOn) <= 7 && (orders.check[o.id]?.short ?? 0) > 0)) {
     alerts.push({ tone: "warn", text: `${o.customer} needs ${orders.check[o.id].short} more balls`, sub: `Due ${dayShort(o.dueOn)}, not enough in ready stock`, href: "/orders" });
   }
-  for (const o of orders.all.filter((o) => o.owedPaise > 0 && o.lastDelivery && daysBetween(o.lastDelivery, today) > 30)) {
+  for (const o of orders.owing.filter((o) => o.lastDelivery && daysBetween(o.lastDelivery, today) > 30)) {
     alerts.push({ tone: "bad", text: `${o.customer} owes ${formatRupees(o.owedPaise)}`, sub: `Delivered ${daysBetween(o.lastDelivery!, today)} days ago`, href: "/orders?tab=collect" });
   }
   for (const c of cards.filter((c) => c.kind !== "other" && c.status !== "ok")) {

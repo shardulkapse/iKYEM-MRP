@@ -9,7 +9,9 @@ import { todayInFactory } from "@/lib/dates";
 import { addDays, dayShort, isValidDay } from "@/lib/day";
 import { LOCATION_TYPE_LABEL, isLocationType, isPlace, placeName, type Place } from "@/lib/locations";
 import { formatRupees, paiseToInput } from "@/lib/money";
-import { lineKey, ordersPageData, type OrderView, type StockCheck } from "@/lib/order-queries";
+import { deliveredPage, lineKey, ordersPageData, type OrderView, type StockCheck } from "@/lib/order-queries";
+import { Pager } from "@/components/pager";
+import { pageOf, paging } from "@/lib/paging";
 import { PERIOD_KINDS, isPeriodKind, periodRange, shiftPeriod, type PeriodKind } from "@/lib/periods";
 import { listBallTypes, listGrades } from "@/lib/setup-queries";
 import { deleteReceipt, recordPayment, undoDelivery } from "./actions";
@@ -44,13 +46,13 @@ async function OrdersBody({ searchParams }: { searchParams: PageProps<"/orders">
     type: (id) => ({ name: typeMap.get(id)?.name ?? "(removed type)", colour: typeMap.get(id)?.colour ?? "red" }),
     grade: (id) => gradeMap.get(id) ?? "(removed grade)",
   };
-  const owing = data.all.filter((o) => o.owedPaise > 0).sort((a, b) => (a.lastDelivery ?? "").localeCompare(b.lastDelivery ?? ""));
+  const owing = data.owing;
   const tab = params.tab === "collect" || params.tab === "done" ? params.tab : "open";
   const formProps = {
     types: data.types.map((t) => ({ id: t.id, name: t.name })),
     grades: data.grades.map((g) => ({ id: g.id, name: g.name })),
     customers: data.customers,
-    usedCountries: [...new Set(data.all.filter((o) => o.locationType === "international" && o.locationCode).map((o) => o.locationCode!))],
+    usedCountries: data.usedCountries,
     ready: data.ready,
     defaultDue: addDays(today, 14),
   };
@@ -67,10 +69,10 @@ async function OrdersBody({ searchParams }: { searchParams: PageProps<"/orders">
         {canOrder ? <OrderDialog title="New order" trigger="New order" triggerClassName="btn sm primary" {...formProps} /> : null}
       </div>
       {!canOrder ? <section className="panel empty"><b>Add ball types and grades first</b>Every order line is a ball type and a grade. Set them up in Setup.</section>
-        : tab === "open" ? <OpenTab orders={data.open} check={data.check} inProduction={data.inProduction} names={names} today={today} owner={owner} ready={data.ready} formProps={formProps} />
-        : tab === "collect" ? <CollectTab orders={owing} names={names} today={today} owner={owner} />
-        : <DoneTab all={data.all} names={names} today={today} owner={owner} kind={isPeriodKind(params.period) ? params.period : "month"} ref_={typeof params.ref === "string" && isValidDay(params.ref) ? params.ref : today}
-            loc={params.loc} places={params.in} formProps={formProps} />}
+        : tab === "open" ? <OpenTab orders={data.open} check={data.check} inProduction={data.inProduction} names={names} today={today} owner={owner} ready={data.ready} formProps={formProps} page={params.page} />
+        : tab === "collect" ? <CollectTab orders={owing} names={names} today={today} owner={owner} page={params.page} />
+        : <DoneTab names={names} today={today} owner={owner} kind={isPeriodKind(params.period) ? params.period : "month"} ref_={typeof params.ref === "string" && isValidDay(params.ref) ? params.ref : today}
+            loc={params.loc} places={params.in} page={params.page} formProps={formProps} />}
     </>
   );
 }
@@ -89,17 +91,21 @@ function StockChip({ o, c, today }: { o: OrderView; c?: StockCheck; today: strin
   return <span className={`chip ${soon ? "bad" : "progress"}`}>Short {c.short}</span>;
 }
 
-function OpenTab({ orders, check, inProduction, names, today, owner, ready, formProps }: {
+function OpenTab({ orders, check, inProduction, names, today, owner, ready, formProps, page }: {
   orders: OrderView[]; check: Record<string, StockCheck>; inProduction: Record<string, number>; names: Names; today: string; owner: boolean; ready: Record<string, number>;
+  page: string | string[] | undefined;
   formProps: React.ComponentProps<typeof OrderDialog> extends infer P ? Omit<P, "title" | "trigger"> : never;
 }) {
   if (!orders.length) return <section className="panel empty"><b>No open orders</b>When an order comes in, add it with the grade and price. It&apos;s checked against ready stock straight away.</section>;
+  // Stock is checked against every open order (earliest due first); only the display is paged.
+  const p = paging(page, orders.length);
   return (
+    <>
     <div className="tbl card">
       <table>
         <thead><tr><th>Customer</th><th>Due</th><th>Balls</th><th className="num">Value</th><th className="num">Paid</th><th>Stock</th><th /></tr></thead>
         <tbody>
-          {orders.map((o) => {
+          {pageOf(orders, p).map((o) => {
             const c = check[o.id];
             const deliverLines = Object.entries(o.remaining).filter(([, left]) => left > 0).map(([k, left]) => {
               const [ballTypeId, gradeId] = k.split("|");
@@ -148,6 +154,8 @@ function OpenTab({ orders, check, inProduction, names, today, owner, ready, form
         </tbody>
       </table>
     </div>
+    <Pager p={p} href="/orders" noun={["order", "orders"]} />
+    </>
   );
 }
 
@@ -254,11 +262,12 @@ function OrderDetails({ o, names, owner }: { o: OrderView; names: Names; owner: 
 
 /* ------------------------------------------------------------ money to collect */
 
-function CollectTab({ orders, names, today, owner }: { orders: OrderView[]; names: Names; today: string; owner: boolean }) {
+function CollectTab({ orders, names, today, owner, page }: { orders: OrderView[]; names: Names; today: string; owner: boolean; page: string | string[] | undefined }) {
   if (!orders.length) return <section className="panel empty"><b>Nobody owes you money</b>Delivered orders show here until they&apos;re paid in full.</section>;
   const days = (o: OrderView) => Math.round((Date.parse(today) - Date.parse(o.lastDelivery ?? today)) / 86400000);
   const total = orders.reduce((a, o) => a + o.owedPaise, 0);
   const old = orders.filter((o) => days(o) > 30).reduce((a, o) => a + o.owedPaise, 0);
+  const p = paging(page, orders.length);
   return (
     <>
       <div className="strip plain">
@@ -270,7 +279,7 @@ function CollectTab({ orders, names, today, owner }: { orders: OrderView[]; name
         <table>
           <thead><tr><th>Customer</th><th>Last delivery</th><th className="num">Delivered worth</th><th>Payments so far</th><th className="num">Still owed</th><th /></tr></thead>
           <tbody>
-            {orders.map((o) => (
+            {pageOf(orders, p).map((o) => (
               <tr key={o.id}>
                 <td><b>{o.customer}</b><LocationLine o={o} />{o.status === "open" ? <><br /><small className="muted">Part delivered</small></> : null}</td>
                 <td className="nw">{o.lastDelivery ? dayShort(o.lastDelivery) : "—"}<br /><small className={days(o) > 30 ? "bad" : "muted"}>{days(o)} days ago</small></td>
@@ -283,19 +292,19 @@ function CollectTab({ orders, names, today, owner }: { orders: OrderView[]; name
           </tbody>
         </table>
       </div>
+      <Pager p={p} href="/orders?tab=collect" noun={["order", "orders"]} />
     </>
   );
 }
 
 /* ------------------------------------------------------------ delivered archive */
 
-function DoneTab({ all, names, today, owner, kind, ref_, loc, places, formProps }: {
-  all: OrderView[]; names: Names; today: string; owner: boolean; kind: PeriodKind; ref_: string;
-  loc: string | string[] | undefined; places: string | string[] | undefined;
+async function DoneTab({ names, today, owner, kind, ref_, loc, places, page, formProps }: {
+  names: Names; today: string; owner: boolean; kind: PeriodKind; ref_: string;
+  loc: string | string[] | undefined; places: string | string[] | undefined; page: string | string[] | undefined;
   formProps: Omit<React.ComponentProps<typeof OrderDialog>, "title" | "trigger">;
 }) {
   const p = periodRange(kind, ref_);
-  const inP = (d: string | null) => !!d && d >= p.from && d <= p.to;
   const prevRef = shiftPeriod(kind, ref_, -1);
   const nextRef = shiftPeriod(kind, ref_, 1);
   const nextOk = periodRange(kind, nextRef).from <= today;
@@ -305,20 +314,9 @@ function DoneTab({ all, names, today, owner, kind, ref_, loc, places, formProps 
   const picked = isLocationType(scope) && typeof places === "string" ? [...new Set(places.split(","))].filter((c) => isPlace(scope, c)) : [];
   const keep = `${scope ? `&loc=${scope}` : ""}${picked.length ? `&in=${picked.join(",")}` : ""}`;
   const href = (k: PeriodKind, r: string) => `/orders?tab=done&period=${k}&ref=${r}${keep}`;
-  const matches = (o: OrderView) =>
-    !scope ? true : scope === "unset" ? !o.locationType : o.locationType === scope && (!picked.length || picked.includes(o.locationCode ?? ""));
-  const used = (t: "domestic" | "international"): Place[] =>
-    [...new Set(all.filter((o) => o.locationType === t && o.locationCode).map((o) => o.locationCode!))]
-      .map((code) => ({ code, name: placeName(t, code) }))
-      .sort((a, b) => a.name.localeCompare(b.name, "en"));
-  const shown = all.filter(matches);
-
-  let balls = 0, sales = 0, cash = 0, online = 0;
-  for (const o of shown) {
-    for (const d of o.deliveries) if (inP(d.deliveredOn)) { sales += d.valuePaise; balls += d.lines.reduce((a, l) => a + l.qty, 0); }
-    for (const r of o.receipts) if (inP(r.receivedOn)) { if (r.mode === "cash") cash += r.amountPaise; else online += r.amountPaise; }
-  }
-  const completed = shown.filter((o) => o.status === "closed" && inP(o.lastDelivery)).sort((a, b) => (b.lastDelivery ?? "").localeCompare(a.lastDelivery ?? ""));
+  const { orders: completed, paging: pg, balls, sales, cash, online, places: used, hasUnset } = await deliveredPage(p.from, p.to, { scope, places: picked }, page);
+  const optionsFor = (t: "domestic" | "international"): Place[] =>
+    used.filter((u) => u.t === t).map((u) => ({ code: u.code, name: placeName(t, u.code) })).sort((a, b) => a.name.localeCompare(b.name, "en"));
 
   return (
     <>
@@ -329,10 +327,10 @@ function DoneTab({ all, names, today, owner, kind, ref_, loc, places, formProps 
         {nextOk ? <Link className="btn sm" href={href(kind, nextRef)} scroll={false} aria-label="Next period">›</Link> : <span className="btn sm" aria-disabled="true">›</span>}
         {p.sub ? <span className="muted">{p.sub}</span> : null}
       </div>
-      <LocationFilter scope={scope} selected={picked} options={{ domestic: used("domestic"), international: used("international") }}
-        hasUnset={all.some((o) => !o.locationType)} period={kind} refDay={ref_} />
+      <LocationFilter scope={scope} selected={picked} options={{ domestic: optionsFor("domestic"), international: optionsFor("international") }}
+        hasUnset={hasUnset} period={kind} refDay={ref_} />
       <div className="strip plain">
-        <div><b>{completed.length}</b><span>Orders completed</span></div>
+        <div><b>{pg.total}</b><span>Orders completed</span></div>
         <div><b>{balls}</b><span>Balls delivered</span></div>
         <div className="hero"><b>{formatRupees(sales)}</b><span>Sales</span></div>
         <div><b>{formatRupees(cash + online)}</b><span>Received: {formatRupees(cash)} cash, {formatRupees(online)} online</span></div>
@@ -358,6 +356,7 @@ function DoneTab({ all, names, today, owner, kind, ref_, loc, places, formProps 
         </div>
       ) : scope ? <section className="panel empty"><b>No orders completed here in this period</b>Nothing delivered in this period matches the location filter. Clear it or pick another period.</section>
         : <section className="panel empty"><b>No orders completed in this period</b>Orders land here once everything on them is delivered. Sales above count every delivery in the period, including part deliveries.</section>}
+      <Pager p={pg} href={href(kind, ref_)} noun={["order", "orders"]} />
       {scope ? <p className="hint" style={{ marginTop: 12 }}>The figures above only count orders that match the location filter.</p> : null}
       <p className="hint" style={{ marginTop: 12 }}>Costs, wages and what&apos;s left over for each period come with the Money screen.</p>
     </>

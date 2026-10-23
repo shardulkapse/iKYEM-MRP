@@ -2,6 +2,7 @@ import { and, eq, gte, lte, sql } from "drizzle-orm";
 import { Field, FormNote } from "@/components/fields";
 import { FormDialog } from "@/components/form-dialog";
 import { PageHeader, Streamed } from "@/components/page";
+import { Pager } from "@/components/pager";
 import { PeriodBar } from "@/components/period-bar";
 import {
   SkeletonLines,
@@ -25,6 +26,7 @@ import {
   owedAllTime,
   type Figures,
 } from "@/lib/money-queries";
+import { paging } from "@/lib/paging";
 import { isPeriodKind, periodRange, type PeriodKind } from "@/lib/periods";
 import { getSettings } from "@/lib/setup-queries";
 import {
@@ -111,7 +113,7 @@ async function MoneyBody({
         ) : tab === "breakeven" ? (
           <BreakEvenTab today={today} />
         ) : tab === "expenses" ? (
-          <ExpensesTab kind={kind} refDay={refDay} today={today} base={base} />
+          <ExpensesTab kind={kind} refDay={refDay} today={today} base={base} page={params.page} />
         ) : tab === "loan" ? (
           <LoanTab today={today} />
         ) : (
@@ -491,22 +493,34 @@ async function ExpensesTab({
   refDay,
   today,
   base,
+  page,
 }: {
   kind: PeriodKind;
   refDay: string;
   today: string;
   base: string;
+  page: string | string[] | undefined;
 }) {
   const p = periodRange(kind, refDay);
-  const rows = await db
-    .select()
+  const inPeriod = and(gte(expenses.spentOn, p.from), lte(expenses.spentOn, p.to));
+  // Totals cover the whole period; the list below shows it a page at a time.
+  const byCategory = await db
+    .select({ category: expenses.category, total: sql<string>`sum(${expenses.amountPaise})`, n: sql<number>`count(*)::int` })
     .from(expenses)
-    .where(and(gte(expenses.spentOn, p.from), lte(expenses.spentOn, p.to)))
-    .orderBy(sql`${expenses.spentOn} desc`, sql`${expenses.createdAt} desc`);
-  const total = rows.reduce((a, r) => a + r.amountPaise, 0);
-  const by = new Map<string, number>();
-  for (const r of rows)
-    by.set(r.category, (by.get(r.category) ?? 0) + r.amountPaise);
+    .where(inPeriod)
+    .groupBy(expenses.category);
+  const by = new Map(byCategory.map((c) => [c.category, Number(c.total)]));
+  const total = [...by.values()].reduce((a, v) => a + v, 0);
+  const pg = paging(page, byCategory.reduce((a, c) => a + c.n, 0));
+  const rows = pg.total
+    ? await db
+        .select()
+        .from(expenses)
+        .where(inPeriod)
+        .orderBy(sql`${expenses.spentOn} desc`, sql`${expenses.createdAt} desc`, sql`${expenses.id} desc`)
+        .limit(pg.size)
+        .offset(pg.offset)
+    : [];
   const add = (
     <FormDialog
       title="Add expense"
@@ -593,6 +607,7 @@ async function ExpensesTab({
               </tbody>
             </table>
           </div>
+          <Pager p={pg} href={`${base}${base.includes("?") ? "&" : "?"}period=${kind}&ref=${refDay}`} noun={["expense", "expenses"]} />
         </>
       ) : (
         <section className="panel empty">

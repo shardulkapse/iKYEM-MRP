@@ -11,7 +11,7 @@ import { requireRole } from "@/lib/auth";
 import { todayInFactory } from "@/lib/dates";
 import { RUPEES_PATTERN, toPaise } from "@/lib/money";
 import { isPlace } from "@/lib/locations";
-import { lineKey, loadOrders } from "@/lib/order-queries";
+import { lineKey, loadOrder } from "@/lib/order-queries";
 
 const rupees = (what: string) => z.string().trim().regex(RUPEES_PATTERN, `Enter ${what} in rupees, like 540 or 540.50.`);
 const batch = (ops: BatchItem<"pg">[]) => db.batch(ops as [BatchItem<"pg">, ...BatchItem<"pg">[]]);
@@ -62,7 +62,7 @@ export async function saveOrder(input: unknown): Promise<ActionResult> {
 
   let status: "open" | "closed" = "open";
   if (v.id) {
-    const existing = (await loadOrders()).find((o) => o.id === v.id);
+    const existing = await loadOrder(v.id);
     if (!existing) return fail("That order no longer exists.");
     const newOrdered: Record<string, number> = {};
     for (const l of v.lines) newOrdered[lineKey(l.ballTypeId, l.gradeId)] = (newOrdered[lineKey(l.ballTypeId, l.gradeId)] ?? 0) + l.qty;
@@ -86,7 +86,7 @@ export async function saveOrder(input: unknown): Promise<ActionResult> {
 
 export async function deleteOrder(id: string): Promise<ActionResult> {
   await requireRole();
-  const order = (await loadOrders()).find((o) => o.id === id);
+  const order = await loadOrder(id);
   if (!order) return fail("That order no longer exists.");
   if (order.deliveries.length || order.receipts.length) return fail("This order has deliveries or payments recorded, so it can't be deleted.");
   await db.delete(orders).where(eq(orders.id, id)); // its lines go with it
@@ -110,7 +110,7 @@ export async function recordDelivery(input: unknown): Promise<ActionResult> {
   if (!parsed.success) return fail(firstIssue(parsed.error));
   const v = parsed.data;
   if (v.deliveredOn > (await todayInFactory())) return fail("The delivery date can't be in the future.");
-  const order = (await loadOrders()).find((o) => o.id === v.orderId);
+  const order = await loadOrder(v.orderId);
   if (!order) return fail("That order no longer exists.");
   if (order.status === "closed") return fail("Everything on this order is already delivered.");
 

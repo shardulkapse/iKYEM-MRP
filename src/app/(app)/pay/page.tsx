@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Field, FormNote } from "@/components/fields";
 import { FormDialog } from "@/components/form-dialog";
 import { PageHeader, Streamed } from "@/components/page";
+import { Pager } from "@/components/pager";
 import { SkeletonList, SkeletonTable, SkeletonTabs } from "@/components/skeletons";
 import { TabLinks } from "@/components/tab-links";
 import { requireRole } from "@/lib/auth";
@@ -9,7 +10,7 @@ import { todayInFactory } from "@/lib/dates";
 import { addDays, dayShort, isValidDay } from "@/lib/day";
 import { PAY_TYPE_LABEL, WEEKDAYS } from "@/lib/labels";
 import { formatRupees, paiseToInput } from "@/lib/money";
-import { lastPayday, nextPayday, openDaysFilled, payPeriod, paydayRows, recentAdvances, salaryRows, type PaydayRow } from "@/lib/pay-queries";
+import { lastPayday, nextPayday, openDaysFilled, payPeriod, paydayRows, advancesPage, salaryRows, type PaydayRow } from "@/lib/pay-queries";
 import { getSettings, listWorkers } from "@/lib/setup-queries";
 import { deleteWagePayment, giveAdvance, payEveryone, paySalary, payWeekly } from "./actions";
 
@@ -49,7 +50,7 @@ async function PayBody({ searchParams }: { searchParams: PageProps<"/pay">["sear
       <Streamed key={`${tab}${payday}${month}`} fallback={<section className="panel"><SkeletonList rows={6} /></section>}>
         {tab === "payday" ? <PaydayTab payday={payday} next={next} today={today} day={day} weeklyOff={settings.weeklyOff} />
           : tab === "salary" ? <SalaryTab month={month} today={today} day={day} />
-          : <AdvancesTab today={today} />}
+          : <AdvancesTab page={params.page} />}
       </Streamed>
     </>
   );
@@ -245,12 +246,12 @@ async function AdvanceButton({ today }: { today: string }) {
   );
 }
 
-async function AdvancesTab({ today }: { today: string }) {
-  const rows = await recentAdvances(addDays(today, -120));
-  if (!rows.length) return <section className="panel empty"><b>No advances in the last four months</b>Use Give an advance when someone takes money before payday.</section>;
+async function AdvancesTab({ page }: { page: string | string[] | undefined }) {
+  const { rows, paging: pg } = await advancesPage(page);
+  if (!rows.length) return <section className="panel empty"><b>No advances yet</b>Use Give an advance when someone takes money before payday.</section>;
   return (
     <section className="panel">
-      <h2>Advances <small>last four months</small></h2>
+      <h2>Advances <small>newest first</small></h2>
       <div className="tbl">
         <table>
           <thead><tr><th>Given on</th><th>Person</th><th>Comes off</th><th>Note</th><th className="num">Amount</th><th /></tr></thead>
@@ -268,6 +269,7 @@ async function AdvancesTab({ today }: { today: string }) {
           </tbody>
         </table>
       </div>
+      <Pager p={pg} href="/pay?tab=advances" noun={["advance", "advances"]} />
     </section>
   );
 }

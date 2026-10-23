@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { FormDialog } from "@/components/form-dialog";
 import { Streamed } from "@/components/page";
+import { Pager } from "@/components/pager";
 import { PeriodBar } from "@/components/period-bar";
 import { SelectNav } from "@/components/select-nav";
 import { Sk, SkeletonPickers, SkeletonStrip, SkeletonTable } from "@/components/skeletons";
@@ -9,6 +10,7 @@ import { todayInFactory } from "@/lib/dates";
 import { dayShort } from "@/lib/day";
 import { PAY_TYPE_LABEL, WEEKDAYS } from "@/lib/labels";
 import { periodRange, type PeriodKind } from "@/lib/periods";
+import { pageOf, paging } from "@/lib/paging";
 import { getSettings, listWorkers } from "@/lib/setup-queries";
 import { STAGES } from "@/lib/stages";
 import {
@@ -79,7 +81,7 @@ async function Person({ params, searchParams }: { params: PageProps<"/team/[id]"
       </div>
       <PeriodBar base={teamHref(path, { task })} kind={kind} refDay={refDay} today={today} />
       <Streamed key={`${task}${kind}${refDay}`} fallback={<BodySkeleton />}>
-        <PersonBody w={w} task={task} kind={kind} refDay={refDay} today={today} weeklyOff={settings.weeklyOff} path={path} />
+        <PersonBody w={w} task={task} kind={kind} refDay={refDay} today={today} weeklyOff={settings.weeklyOff} path={path} page={sp.page} />
       </Streamed>
     </>
   );
@@ -88,8 +90,8 @@ async function Person({ params, searchParams }: { params: PageProps<"/team/[id]"
 const pct = (n: number | null) => (n == null ? "—" : `${(n * 100).toFixed(n && n < 0.1 ? 1 : 0)}%`);
 const avgText = (n: number | null) => (n == null ? "—" : n.toFixed(1));
 
-async function PersonBody({ w, task, kind, refDay, today, weeklyOff, path }: {
-  w: Worker; task: TaskKey; kind: PeriodKind; refDay: string; today: string; weeklyOff: number | null; path: string;
+async function PersonBody({ w, task, kind, refDay, today, weeklyOff, path, page }: {
+  w: Worker; task: TaskKey; kind: PeriodKind; refDay: string; today: string; weeklyOff: number | null; path: string; page: string | string[] | undefined;
 }) {
   const p = periodRange(kind, refDay);
   const to = p.to < today ? p.to : today;
@@ -127,7 +129,7 @@ async function PersonBody({ w, task, kind, refDay, today, weeklyOff, path }: {
       <div className="grid">
         {task === "all" ? <ByTask s={s} link={link} /> : <ByType s={s} cutting={task === "cutting"} />}
         {bk && bk.rows.length ? <Buckets kind={bk.kind} rows={bk.rows} link={link} /> : null}
-        <DayList days={days} task={task} collapse={kind === "year"} />
+        <DayList days={days} task={task} page={page} href={link({})} />
       </div>
     </>
   );
@@ -250,18 +252,24 @@ function WorkLine({ e, showTask }: { e: Entry; showTask: boolean }) {
   );
 }
 
-function DayList({ days, task, collapse }: { days: DayRow[]; task: TaskKey; collapse: boolean }) {
+// A month's days (up to 31 rows) always fit on one page; quarters and years run to more.
+const DAYS_PER_PAGE = 35;
+
+function DayList({ days, task, page, href }: { days: DayRow[]; task: TaskKey; page: string | string[] | undefined; href: string }) {
   const title = <>Day by day <small>{task === "all" ? "every day they were employed, newest first" : `days they did ${TASK_LABEL[task].toLowerCase()}`}</small></>;
   if (!days.length) {
     return <section className="panel"><h2>{title}</h2><p className="muted" style={{ margin: 0 }}>{task === "all" ? "No days to show in this period." : `No ${TASK_LABEL[task].toLowerCase()} in this period.`}</p></section>;
   }
   const max = Math.max(1, ...days.map((d) => d.good));
-  const table = (
+  const pg = paging(page, days.length, DAYS_PER_PAGE);
+  return (
+    <section className="panel">
+      <h2>{title}</h2>
     <div className="tbl">
       <table className="days">
         <thead><tr><th>Day</th><th>Attendance</th><th>Work</th><th className="num">Done</th><th className="num">Rejected</th><th className="barcol" /></tr></thead>
         <tbody>
-          {days.map((d) => {
+          {pageOf(days, pg).map((d) => {
             const st = STATUS[d.status];
             const quiet = d.status === "closed" || d.status === "missing" || (!d.entries.length && d.status === "absent");
             return (
@@ -281,14 +289,7 @@ function DayList({ days, task, collapse }: { days: DayRow[]; task: TaskKey; coll
         </tbody>
       </table>
     </div>
+      <Pager p={pg} href={href} noun={["day", "days"]} />
+    </section>
   );
-  if (collapse) {
-    return (
-      <details className="panel more">
-        <summary>Day by day ({days.length} days)</summary>
-        <div style={{ marginTop: 12 }}>{table}</div>
-      </details>
-    );
-  }
-  return <section className="panel"><h2>{title}</h2>{table}</section>;
 }
