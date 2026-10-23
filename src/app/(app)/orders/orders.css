@@ -9,7 +9,35 @@
   .oline input, .oline select { border: 1px solid var(--line2); background: var(--panel); border-radius: 10px; height: 40px; padding: 0 10px; font: inherit; font-size: 14.5px; color: var(--ink); width: 100%; min-width: 0; }
   .oline input:focus, .oline select:focus { outline: none; border-color: var(--field); box-shadow: 0 0 0 3px color-mix(in srgb, var(--field) 22%, transparent); }
   .mnote { font-size: 12.5px; margin: 2px 0 4px; }
+
+  /* order form: domestic / international */
+  .loc-seg { display: flex; height: 40px; align-items: stretch; }
+  .loc-seg button { flex: 1; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+  .loc-seg button[aria-checked="true"] { background: var(--field); color: var(--panel); }
+  .fld select:disabled { opacity: .55; cursor: not-allowed; }
+
+  /* Delivered tab: location filter */
+  .ofilter { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 12px; margin: 0 0 14px; }
+  .ofield { position: relative; display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; color: var(--muted); font-weight: 600; }
+  .ofield select, .opick { height: 38px; min-width: 200px; border: 1px solid var(--line2); background: var(--panel); border-radius: 10px; padding: 0 11px; font: inherit; font-size: 14.5px; font-weight: 560; color: var(--ink); cursor: pointer; }
+  .opick { display: flex; align-items: center; justify-content: space-between; gap: 10px; text-align: left; }
+  .opick span { color: var(--muted); font-size: 12px; }
+  .ofield select:focus, .opick:focus-visible { outline: none; border-color: var(--field); box-shadow: 0 0 0 3px color-mix(in srgb, var(--field) 22%, transparent); }
+  .opop { position: absolute; top: calc(100% + 6px); left: 0; z-index: 30; width: min(320px, calc(100vw - 32px)); background: var(--panel); border: 1px solid var(--line2); border-radius: 12px; box-shadow: 0 12px 32px rgba(0, 0, 0, .22); padding: 10px; display: flex; flex-direction: column; gap: 8px; color: var(--ink); font-weight: 500; }
+  .opop input[type="search"] { height: 36px; border: 1px solid var(--line2); background: var(--panel2); border-radius: 9px; padding: 0 10px; font: inherit; font-size: 14px; color: var(--ink); }
+  .olist { max-height: 260px; overflow: auto; display: flex; flex-direction: column; }
+  .olist label { display: flex; align-items: center; gap: 9px; padding: 7px 6px; border-radius: 7px; font-size: 14px; cursor: pointer; }
+  .olist label:hover { background: var(--panel2); }
+  .olist input { width: 16px; height: 16px; accent-color: var(--field); }
+  .ofoot { display: flex; justify-content: space-between; gap: 8px; border-top: 1px solid var(--line); padding-top: 8px; }
+  .ochips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding-bottom: 6px; }
+  .ochips .chip { cursor: pointer; border: 1px solid var(--line2); background: var(--panel); color: var(--ink); }
+  .ochips .chip:hover { border-color: var(--cherry); color: var(--cherry); }
+  .ochips .link-btn { all: unset; cursor: pointer; color: var(--field); font-size: 13px; font-weight: 600; }
+  .ochips .link-btn:hover { text-decoration: underline; }
   @media (max-width: 900px) {
+    .ofield { flex: 1 1 180px; }
+    .ofield select, .opick { min-width: 0; width: 100%; }
     .oline { grid-template-columns: 1fr 1fr 70px 90px 32px; }
     .oline.dl { grid-template-columns: 1fr 60px 60px 80px 90px; font-size: 13px; }
   }

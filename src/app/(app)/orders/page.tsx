@@ -7,13 +7,15 @@ import { SkeletonTable, SkeletonTabs } from "@/components/skeletons";
 import { getRole, requireRole } from "@/lib/auth";
 import { todayInFactory } from "@/lib/dates";
 import { addDays, dayShort, isValidDay } from "@/lib/day";
+import { LOCATION_TYPE_LABEL, isLocationType, isPlace, placeName, type Place } from "@/lib/locations";
 import { formatRupees, paiseToInput } from "@/lib/money";
 import { lineKey, ordersPageData, type OrderView, type StockCheck } from "@/lib/order-queries";
 import { PERIOD_KINDS, isPeriodKind, periodRange, shiftPeriod, type PeriodKind } from "@/lib/periods";
 import { listBallTypes, listGrades } from "@/lib/setup-queries";
 import { deleteReceipt, recordPayment, undoDelivery } from "./actions";
 import { DeliverDialog } from "./deliver-dialog";
-import { OrderDialog } from "./order-dialog";
+import { LocationFilter, type LocationScope } from "./location-filter";
+import { OrderDialog, type OrderInitial } from "./order-dialog";
 
 import "./orders.css";
 
@@ -48,6 +50,7 @@ async function OrdersBody({ searchParams }: { searchParams: PageProps<"/orders">
     types: data.types.map((t) => ({ id: t.id, name: t.name })),
     grades: data.grades.map((g) => ({ id: g.id, name: g.name })),
     customers: data.customers,
+    usedCountries: [...new Set(data.all.filter((o) => o.locationType === "international" && o.locationCode).map((o) => o.locationCode!))],
     ready: data.ready,
     defaultDue: addDays(today, 14),
   };
@@ -66,7 +69,8 @@ async function OrdersBody({ searchParams }: { searchParams: PageProps<"/orders">
       {!canOrder ? <section className="panel empty"><b>Add ball types and grades first</b>Every order line is a ball type and a grade. Set them up in Setup.</section>
         : tab === "open" ? <OpenTab orders={data.open} check={data.check} inProduction={data.inProduction} names={names} today={today} owner={owner} ready={data.ready} formProps={formProps} />
         : tab === "collect" ? <CollectTab orders={owing} names={names} today={today} owner={owner} />
-        : <DoneTab all={data.all} names={names} today={today} owner={owner} kind={isPeriodKind(params.period) ? params.period : "month"} ref_={typeof params.ref === "string" && isValidDay(params.ref) ? params.ref : today} />}
+        : <DoneTab all={data.all} names={names} today={today} owner={owner} kind={isPeriodKind(params.period) ? params.period : "month"} ref_={typeof params.ref === "string" && isValidDay(params.ref) ? params.ref : today}
+            loc={params.loc} places={params.in} formProps={formProps} />}
     </>
   );
 }
@@ -105,7 +109,7 @@ function OpenTab({ orders, check, inProduction, names, today, owner, ready, form
             });
             return (
               <tr key={o.id}>
-                <td><b>{o.customer}</b>{o.phone ? <><br /><small className="muted">{o.phone}</small></> : null}{o.notes ? <><br /><small className="muted">{o.notes}</small></> : null}</td>
+                <td><b>{o.customer}</b>{o.phone ? <><br /><small className="muted">{o.phone}</small></> : null}<LocationLine o={o} />{o.notes ? <><br /><small className="muted">{o.notes}</small></> : null}</td>
                 <td className={`nw ${o.dueOn < today ? "bad" : ""}`}>{dayShort(o.dueOn)}<br /><small className="muted">{dueText(o.dueOn, today)}</small></td>
                 <td style={{ fontSize: 13.5 }}>
                   {o.lines.map((l) => {
@@ -130,7 +134,7 @@ function OpenTab({ orders, check, inProduction, names, today, owner, ready, form
                     <OrderDialog
                       title={`Edit order: ${o.customer}`}
                       trigger="Edit"
-                      initial={{ id: o.id, customer: o.customer, phone: o.phone ?? "", dueOn: o.dueOn, notes: o.notes ?? "", lines: o.lines.map((l) => ({ ballTypeId: l.ballTypeId, gradeId: l.gradeId, qty: l.qty, price: paiseToInput(l.pricePaise) })) }}
+                      initial={initialOf(o)}
                       delivered={o.delivered}
                       canDelete={!o.deliveries.length && !o.receipts.length}
                       {...formProps}
@@ -145,6 +149,29 @@ function OpenTab({ orders, check, inProduction, names, today, owner, ready, form
       </table>
     </div>
   );
+}
+
+/* ------------------------------------------------------------ location */
+
+// What the edit form starts with for an existing order.
+function initialOf(o: OrderView): OrderInitial {
+  return {
+    id: o.id, customer: o.customer, phone: o.phone ?? "", dueOn: o.dueOn, notes: o.notes ?? "",
+    locationType: o.locationType, locationCode: o.locationCode ?? "", locationNote: o.locationNote ?? "",
+    lines: o.lines.map((l) => ({ ballTypeId: l.ballTypeId, gradeId: l.gradeId, qty: l.qty, price: paiseToInput(l.pricePaise) })),
+  };
+}
+
+// "Maharashtra", or "United Kingdom · International"
+function locationText(o: OrderView) {
+  if (!o.locationType) return null;
+  const name = placeName(o.locationType, o.locationCode);
+  return o.locationType === "international" ? `${name} · International` : name;
+}
+
+function LocationLine({ o }: { o: OrderView }) {
+  const t = locationText(o);
+  return t ? <><br /><small className="muted">{t}{o.locationNote ? `, ${o.locationNote}` : ""}</small></> : null;
 }
 
 /* ------------------------------------------------------------ payments */
@@ -191,6 +218,7 @@ function OrderDetails({ o, names, owner }: { o: OrderView; names: Names; owner: 
     <InfoDialog title={o.customer} trigger="View">
       <dl className="kv">
         <dt>Due</dt><dd>{dayShort(o.dueOn)}</dd>
+        <dt>Location</dt><dd>{o.locationType ? <>{placeName(o.locationType, o.locationCode)} <span className="muted">({LOCATION_TYPE_LABEL[o.locationType]})</span>{o.locationNote ? <><br /><span className="muted">{o.locationNote}</span></> : null}</> : <span className="muted">Not set</span>}</dd>
         <dt>Status</dt><dd>{o.status === "closed" ? "Delivered" : "Open"}</dd>
         <dt>Order value</dt><dd>{formatRupees(o.valuePaise)}</dd>
         <dt>Delivered</dt><dd>{formatRupees(o.deliveredValuePaise)}</dd>
@@ -244,7 +272,7 @@ function CollectTab({ orders, names, today, owner }: { orders: OrderView[]; name
           <tbody>
             {orders.map((o) => (
               <tr key={o.id}>
-                <td><b>{o.customer}</b>{o.status === "open" ? <><br /><small className="muted">Part delivered</small></> : null}</td>
+                <td><b>{o.customer}</b><LocationLine o={o} />{o.status === "open" ? <><br /><small className="muted">Part delivered</small></> : null}</td>
                 <td className="nw">{o.lastDelivery ? dayShort(o.lastDelivery) : "—"}<br /><small className={days(o) > 30 ? "bad" : "muted"}>{days(o)} days ago</small></td>
                 <td className="num">{formatRupees(o.deliveredValuePaise)}</td>
                 <td><PaymentsList o={o} owner={owner} /></td>
@@ -261,20 +289,36 @@ function CollectTab({ orders, names, today, owner }: { orders: OrderView[]; name
 
 /* ------------------------------------------------------------ delivered archive */
 
-function DoneTab({ all, names, today, owner, kind, ref_ }: { all: OrderView[]; names: Names; today: string; owner: boolean; kind: PeriodKind; ref_: string }) {
+function DoneTab({ all, names, today, owner, kind, ref_, loc, places, formProps }: {
+  all: OrderView[]; names: Names; today: string; owner: boolean; kind: PeriodKind; ref_: string;
+  loc: string | string[] | undefined; places: string | string[] | undefined;
+  formProps: Omit<React.ComponentProps<typeof OrderDialog>, "title" | "trigger">;
+}) {
   const p = periodRange(kind, ref_);
   const inP = (d: string | null) => !!d && d >= p.from && d <= p.to;
   const prevRef = shiftPeriod(kind, ref_, -1);
   const nextRef = shiftPeriod(kind, ref_, 1);
   const nextOk = periodRange(kind, nextRef).from <= today;
-  const href = (k: PeriodKind, r: string) => `/orders?tab=done&period=${k}&ref=${r}`;
+
+  // Location filter: ?loc=domestic|international|unset and, for the first two, ?in=MH,KA
+  const scope: LocationScope = isLocationType(loc) || loc === "unset" ? loc : "";
+  const picked = isLocationType(scope) && typeof places === "string" ? [...new Set(places.split(","))].filter((c) => isPlace(scope, c)) : [];
+  const keep = `${scope ? `&loc=${scope}` : ""}${picked.length ? `&in=${picked.join(",")}` : ""}`;
+  const href = (k: PeriodKind, r: string) => `/orders?tab=done&period=${k}&ref=${r}${keep}`;
+  const matches = (o: OrderView) =>
+    !scope ? true : scope === "unset" ? !o.locationType : o.locationType === scope && (!picked.length || picked.includes(o.locationCode ?? ""));
+  const used = (t: "domestic" | "international"): Place[] =>
+    [...new Set(all.filter((o) => o.locationType === t && o.locationCode).map((o) => o.locationCode!))]
+      .map((code) => ({ code, name: placeName(t, code) }))
+      .sort((a, b) => a.name.localeCompare(b.name, "en"));
+  const shown = all.filter(matches);
 
   let balls = 0, sales = 0, cash = 0, online = 0;
-  for (const o of all) {
+  for (const o of shown) {
     for (const d of o.deliveries) if (inP(d.deliveredOn)) { sales += d.valuePaise; balls += d.lines.reduce((a, l) => a + l.qty, 0); }
     for (const r of o.receipts) if (inP(r.receivedOn)) { if (r.mode === "cash") cash += r.amountPaise; else online += r.amountPaise; }
   }
-  const completed = all.filter((o) => o.status === "closed" && inP(o.lastDelivery)).sort((a, b) => (b.lastDelivery ?? "").localeCompare(a.lastDelivery ?? ""));
+  const completed = shown.filter((o) => o.status === "closed" && inP(o.lastDelivery)).sort((a, b) => (b.lastDelivery ?? "").localeCompare(a.lastDelivery ?? ""));
 
   return (
     <>
@@ -285,6 +329,8 @@ function DoneTab({ all, names, today, owner, kind, ref_ }: { all: OrderView[]; n
         {nextOk ? <Link className="btn sm" href={href(kind, nextRef)} scroll={false} aria-label="Next period">›</Link> : <span className="btn sm" aria-disabled="true">›</span>}
         {p.sub ? <span className="muted">{p.sub}</span> : null}
       </div>
+      <LocationFilter scope={scope} selected={picked} options={{ domestic: used("domestic"), international: used("international") }}
+        hasUnset={all.some((o) => !o.locationType)} period={kind} refDay={ref_} />
       <div className="strip plain">
         <div><b>{completed.length}</b><span>Orders completed</span></div>
         <div><b>{balls}</b><span>Balls delivered</span></div>
@@ -294,22 +340,25 @@ function DoneTab({ all, names, today, owner, kind, ref_ }: { all: OrderView[]; n
       {completed.length ? (
         <div className="tbl card">
           <table>
-            <thead><tr><th>Customer</th><th>Completed</th><th className="num">Balls</th><th className="num">Sold for</th><th>Payment</th><th /></tr></thead>
+            <thead><tr><th>Customer</th><th>Location</th><th>Completed</th><th className="num">Balls</th><th className="num">Sold for</th><th>Payment</th><th /></tr></thead>
             <tbody>
               {completed.map((o) => (
                 <tr key={o.id}>
                   <td><b>{o.customer}</b></td>
+                  <td>{o.locationType ? <>{placeName(o.locationType, o.locationCode)}<br /><small className="muted">{LOCATION_TYPE_LABEL[o.locationType]}{o.locationNote ? `, ${o.locationNote}` : ""}</small></> : <span className="muted">Not set</span>}</td>
                   <td className="nw">{o.lastDelivery ? dayShort(o.lastDelivery) : "—"}</td>
                   <td className="num">{o.ballsDelivered}</td>
                   <td className="num">{formatRupees(o.deliveredValuePaise)}</td>
                   <td>{o.owedPaise === 0 ? <span className="chip done">Paid</span> : <span className={`chip ${o.receivedPaise ? "progress" : "bad"}`}>{formatRupees(o.owedPaise)} owed</span>}</td>
-                  <td><OrderDetails o={o} names={names} owner={owner} /></td>
+                  <td className="nw"><span className="row-actions"><OrderDialog title={`Edit order: ${o.customer}`} trigger="Edit" initial={initialOf(o)} delivered={o.delivered} canDelete={false} {...formProps} /><OrderDetails o={o} names={names} owner={owner} /></span></td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-      ) : <section className="panel empty"><b>No orders completed in this period</b>Orders land here once everything on them is delivered. Sales above count every delivery in the period, including part deliveries.</section>}
+      ) : scope ? <section className="panel empty"><b>No orders completed here in this period</b>Nothing delivered in this period matches the location filter. Clear it or pick another period.</section>
+        : <section className="panel empty"><b>No orders completed in this period</b>Orders land here once everything on them is delivered. Sales above count every delivery in the period, including part deliveries.</section>}
+      {scope ? <p className="hint" style={{ marginTop: 12 }}>The figures above only count orders that match the location filter.</p> : null}
       <p className="hint" style={{ marginTop: 12 }}>Costs, wages and what&apos;s left over for each period come with the Money screen.</p>
     </>
   );

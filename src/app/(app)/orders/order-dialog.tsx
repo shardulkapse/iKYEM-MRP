@@ -1,12 +1,17 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
+import { COUNTRIES, INDIA_STATES, LOCATION_TYPE_LABEL, placeName, type LocationType } from "@/lib/locations";
 import { formatRupees } from "@/lib/money";
 import { deleteOrder, saveOrder } from "./actions";
 
 type Opt = { id: string; name: string; colour?: string };
 type Line = { key: number; ballTypeId: string; gradeId: string; qty: string; price: string };
-export type OrderInitial = { id: string; customer: string; phone: string; dueOn: string; notes: string; lines: { ballTypeId: string; gradeId: string; qty: number; price: string }[] };
+export type OrderInitial = {
+  id: string; customer: string; phone: string; dueOn: string; notes: string;
+  locationType: LocationType | null; locationCode: string; locationNote: string;
+  lines: { ballTypeId: string; gradeId: string; qty: number; price: string }[];
+};
 
 type Props = {
   title: string;
@@ -17,7 +22,8 @@ type Props = {
   canDelete?: boolean;
   types: Opt[];
   grades: Opt[];
-  customers: { name: string; phone: string | null }[];
+  customers: { name: string; phone: string | null; location: { type: LocationType; code: string } | null }[];
+  usedCountries: string[]; // country codes already on orders, offered first
   ready: Record<string, number>;
   defaultDue: string;
 };
@@ -37,12 +43,15 @@ export function OrderDialog(props: Props) {
   );
 }
 
-function OrderForm({ title, initial, delivered = {}, canDelete, types, grades, customers, ready, defaultDue, close }: Props & { close: () => void }) {
+function OrderForm({ title, initial, delivered = {}, canDelete, types, grades, customers, usedCountries, ready, defaultDue, close }: Props & { close: () => void }) {
   const firstLine = (): Line => ({ key: seq++, ballTypeId: types[0]?.id ?? "", gradeId: grades[0]?.id ?? "", qty: "100", price: "" });
   const [customer, setCustomer] = useState(initial?.customer ?? "");
   const [phone, setPhone] = useState(initial?.phone ?? "");
   const [dueOn, setDueOn] = useState(initial?.dueOn ?? defaultDue);
   const [notes, setNotes] = useState(initial?.notes ?? "");
+  const [locType, setLocType] = useState<LocationType | "">(initial?.locationType ?? "");
+  const [locCode, setLocCode] = useState(initial?.locationCode ?? "");
+  const [locNote, setLocNote] = useState(initial?.locationNote ?? "");
   const [lines, setLines] = useState<Line[]>(() => initial?.lines.map((l) => ({ key: seq++, ballTypeId: l.ballTypeId, gradeId: l.gradeId, qty: String(l.qty), price: l.price })) ?? [firstLine()]);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -54,14 +63,23 @@ function OrderForm({ title, initial, delivered = {}, canDelete, types, grades, c
     setCustomer(name);
     const known = customers.find((c) => c.name.toLowerCase() === name.trim().toLowerCase());
     if (known?.phone && !phone) setPhone(known.phone);
+    // A repeat customer usually goes to the same place: fill it in if nothing is chosen yet.
+    if (known?.location && !locType) { setLocType(known.location.type); setLocCode(known.location.code); }
   };
+
+  const chooseType = (t: LocationType) => {
+    if (t === locType) return;
+    setLocType(t);
+    setLocCode(""); // a state isn't a country, so pick again
+  };
+  const used = usedCountries.map((c) => ({ code: c, name: placeName("international", c) })).sort((a, b) => a.name.localeCompare(b.name, "en"));
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     start(async () => {
       const res = await saveOrder({
-        id: initial?.id ?? null, customer, phone, dueOn, notes,
+        id: initial?.id ?? null, customer, phone, dueOn, notes, locationType: locType, locationCode: locCode, locationNote: locNote,
         lines: lines.map((l) => ({ ballTypeId: l.ballTypeId, gradeId: l.gradeId, qty: Number(l.qty), price: l.price })),
       });
       if (res.ok) close();
@@ -89,6 +107,33 @@ function OrderForm({ title, initial, delivered = {}, canDelete, types, grades, c
         </label>
         <label className="fld"><span>Phone (optional)</span><input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} /></label>
         <label className="fld"><span>Due date</span><input type="date" value={dueOn} onChange={(e) => setDueOn(e.target.value)} required /></label>
+
+        <div className="fld">
+          <span id="loc-type-label">Location</span>
+          <div className="seg loc-seg" role="radiogroup" aria-labelledby="loc-type-label">
+            {(["domestic", "international"] as const).map((t) => (
+              <button key={t} type="button" role="radio" aria-checked={locType === t} onClick={() => chooseType(t)}>{LOCATION_TYPE_LABEL[t]}</button>
+            ))}
+          </div>
+        </div>
+        <label className="fld">
+          <span>{locType === "international" ? "Country" : "State or union territory"}</span>
+          <select value={locCode} onChange={(e) => setLocCode(e.target.value)} disabled={!locType} required>
+            <option value="">{!locType ? "Choose domestic or international first" : locType === "domestic" ? "Choose a state" : "Choose a country"}</option>
+            {locType === "domestic" ? (
+              <>
+                <optgroup label="States">{INDIA_STATES.filter((p) => !p.ut).map((p) => <option key={p.code} value={p.code}>{p.name}</option>)}</optgroup>
+                <optgroup label="Union territories">{INDIA_STATES.filter((p) => p.ut).map((p) => <option key={p.code} value={p.code}>{p.name}</option>)}</optgroup>
+              </>
+            ) : locType === "international" ? (
+              <>
+                {used.length ? <optgroup label="Used before">{used.map((p) => <option key={`u-${p.code}`} value={p.code}>{p.name}</option>)}</optgroup> : null}
+                <optgroup label="All countries">{COUNTRIES.map((p) => <option key={p.code} value={p.code}>{p.name}</option>)}</optgroup>
+              </>
+            ) : null}
+          </select>
+        </label>
+        <label className="fld full"><span>Location note</span><textarea value={locNote} onChange={(e) => setLocNote(e.target.value)} placeholder="City, delivery address, transport or courier details" rows={2} /></label>
 
         <div className="sub"><span>Balls</span><button type="button" className="btn sm" onClick={() => setLines((ls) => [...ls, { ...firstLine(), ballTypeId: ls.at(-1)?.ballTypeId ?? firstLine().ballTypeId, gradeId: ls.at(-1)?.gradeId ?? firstLine().gradeId, qty: "", price: ls.at(-1)?.price ?? "" }])}>Add line</button></div>
         <div className="olines">

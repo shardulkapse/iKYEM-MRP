@@ -10,6 +10,7 @@ import { type ActionResult, fail, firstIssue, ok } from "@/lib/action-result";
 import { requireRole } from "@/lib/auth";
 import { todayInFactory } from "@/lib/dates";
 import { RUPEES_PATTERN, toPaise } from "@/lib/money";
+import { isPlace } from "@/lib/locations";
 import { lineKey, loadOrders } from "@/lib/order-queries";
 
 const rupees = (what: string) => z.string().trim().regex(RUPEES_PATTERN, `Enter ${what} in rupees, like 540 or 540.50.`);
@@ -33,6 +34,9 @@ const orderSchema = z.object({
   phone: z.string().trim().max(30),
   dueOn: z.iso.date("Pick a due date."),
   notes: z.string().trim().max(500),
+  locationType: z.enum(["domestic", "international"], "Choose whether the order is domestic or international."),
+  locationCode: z.string().trim(),
+  locationNote: z.string().trim().max(500),
   lines: z
     .array(
       z.object({
@@ -44,6 +48,10 @@ const orderSchema = z.object({
     )
     .min(1, "Add at least one line of balls.")
     .max(50),
+}).superRefine((v, ctx) => {
+  if (!isPlace(v.locationType, v.locationCode)) {
+    ctx.addIssue({ code: "custom", message: v.locationType === "domestic" ? "Choose the state." : "Choose the country." });
+  }
 });
 
 export async function saveOrder(input: unknown): Promise<ActionResult> {
@@ -66,7 +74,7 @@ export async function saveOrder(input: unknown): Promise<ActionResult> {
 
   const customerId = await findOrCreateCustomer(v.customer, v.phone, userId);
   const id = v.id ?? crypto.randomUUID();
-  const fields = { customerId, dueOn: v.dueOn, notes: v.notes || null, status };
+  const fields = { customerId, dueOn: v.dueOn, notes: v.notes || null, status, locationType: v.locationType, locationCode: v.locationCode, locationNote: v.locationNote || null };
   await batch([
     v.id ? db.update(orders).set(fields).where(eq(orders.id, id)) : db.insert(orders).values({ id, ...fields, createdBy: userId }),
     db.delete(orderLines).where(eq(orderLines.orderId, id)),

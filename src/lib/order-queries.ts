@@ -2,12 +2,14 @@ import "server-only";
 import { asc } from "drizzle-orm";
 import { db } from "@/db";
 import { customers, deliveries, deliveryLines, orderLines, orders, receipts } from "@/db/schema";
+import type { LocationType } from "@/lib/locations";
 import { activeTypesAndGrades, readyStockByTypeAndGrade, wipByTypeAndBuffer } from "@/lib/queries";
 
 export const lineKey = (ballTypeId: string, gradeId: string) => `${ballTypeId}|${gradeId}`;
 
 export type OrderView = {
   id: string; customerId: string; customer: string; phone: string | null; dueOn: string; status: "open" | "closed"; notes: string | null; createdAt: string;
+  locationType: LocationType | null; locationCode: string | null; locationNote: string | null;
   lines: { id: string; ballTypeId: string; gradeId: string; qty: number; pricePaise: number }[];
   ordered: Record<string, number>; delivered: Record<string, number>; remaining: Record<string, number>;
   deliveries: { id: string; deliveredOn: string; lines: { ballTypeId: string; gradeId: string; qty: number; pricePaise: number }[]; valuePaise: number }[];
@@ -55,6 +57,7 @@ export async function loadOrders(): Promise<OrderView[]> {
     const c = customerById.get(o.customerId);
     return {
       id: o.id, customerId: o.customerId, customer: c?.name ?? "(removed customer)", phone: c?.phone ?? null, dueOn: o.dueOn, status: o.status, notes: o.notes,
+      locationType: o.locationType, locationCode: o.locationCode, locationNote: o.locationNote,
       createdAt: o.createdAt.toISOString(),
       lines, ordered, delivered, remaining, deliveries: dels, receipts: recs,
       valuePaise, deliveredValuePaise, receivedPaise,
@@ -96,11 +99,16 @@ export async function ordersPageData() {
     const t = k.split("|")[0];
     inProduction[t] = (inProduction[t] ?? 0) + Math.max(0, v);
   }
+  // Each customer's latest location, to fill in when they order again.
+  const lastLocation = new Map<string, { type: LocationType; code: string }>();
+  for (const o of [...all].sort((a, b) => a.createdAt.localeCompare(b.createdAt))) {
+    if (o.locationType && o.locationCode) lastLocation.set(o.customerId, { type: o.locationType, code: o.locationCode });
+  }
   return {
     all, open,
     check: checkStock(open, ready),
     ready: Object.fromEntries(ready),
     inProduction, types, grades,
-    customers: customerRows.map((c) => ({ name: c.name, phone: c.phone })),
+    customers: customerRows.map((c) => ({ name: c.name, phone: c.phone, location: lastLocation.get(c.id) ?? null })),
   };
 }

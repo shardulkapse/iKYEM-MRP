@@ -231,16 +231,25 @@ export const customers = pgTable("customers", {
   ...audit,
 }, (t) => [uniqueIndex("customers_name_uq").on(t.name)]);
 
+// Where an order goes: domestic (code = an Indian state or union territory) or international
+// (code = a country). Names live in src/lib/locations.ts. Orders from before this was added have
+// none until they're edited; the check keeps type and code set together.
+export const locationType = pgEnum("location_type", ["domestic", "international"]);
+
 export const orders = pgTable("orders", {
   id: uuid("id").primaryKey().defaultRandom(),
   customerId: uuid("customer_id").notNull().references(() => customers.id),
   dueOn: date("due_on", { mode: "string" }).notNull(),
   status: orderStatus("status").notNull().default("open"),
   notes: text("notes"),
+  locationType: locationType("location_type"),
+  locationCode: text("location_code"),
+  locationNote: text("location_note"),
   ...audit,
 }, (t) => [
   index("orders_status_due_idx").on(t.status, t.dueOn),
   index("orders_customer_idx").on(t.customerId),
+  check("location_set_together", sql`(${t.locationType} is null) = (${t.locationCode} is null)`),
 ]);
 
 export const orderLines = pgTable("order_lines", {

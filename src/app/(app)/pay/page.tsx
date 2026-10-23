@@ -72,6 +72,14 @@ async function PaydayTab({ payday, next, today, day, weeklyOff }: { payday: stri
   const toPay = unpaid.reduce((a, r) => a + r.due, 0);
   const paid = rows.reduce((a, r) => a + (r.paid?.amountPaise ?? 0), 0);
   const paidOn = payday <= today ? payday : today;
+  // Daily-wage workers on their own: days present so far this work week × their rate, less any
+  // advance, for everyone not yet marked paid. Grows as each day's sheet is saved.
+  const dailyRows = rows.filter((r) => r.worker.payType === "daily");
+  const dailyUnpaid = dailyRows.filter((r) => !r.paid);
+  const dailyOwed = dailyUnpaid.reduce((a, r) => a + r.due, 0);
+  const dailyDays = dailyUnpaid.reduce((a, r) => a + r.days, 0);
+  const dailyAdvances = dailyUnpaid.reduce((a, r) => a + Math.min(r.advances, r.earned), 0);
+  const weekOpen = to >= today; // the work week hasn't finished yet
   const groups = (["daily", "piece", "salary"] as const).map((k) => ({ k, rows: rows.filter((r) => r.worker.payType === k) })).filter((g) => g.rows.length);
   return (
     <>
@@ -83,7 +91,17 @@ async function PaydayTab({ payday, next, today, day, weeklyOff }: { payday: stri
         {payday !== next ? <Link className="btn sm" href="/pay" scroll={false}>Next payday</Link> : null}
       </div>
       <div className="strip plain">
-        <div className={toPay ? "alert" : ""}><b>{formatRupees(toPay)}</b><span>Still to pay ({unpaid.length})</span></div>
+        <div className={toPay ? "alert" : ""}><b>{formatRupees(toPay)}</b><span>Still to pay, everyone ({unpaid.length})</span></div>
+        {dailyRows.length ? (
+          <div className="hero">
+            <b>{formatRupees(dailyOwed)}</b>
+            <span>
+              Owed to daily workers{weekOpen ? " so far this week" : ""}: {dailyDays % 1 ? dailyDays.toFixed(1) : dailyDays} {dailyDays === 1 ? "day" : "days"} worked
+              {dailyAdvances ? `, less ${formatRupees(dailyAdvances)} advance` : ""}
+              {dailyUnpaid.length < dailyRows.length ? `, ${dailyRows.length - dailyUnpaid.length} already paid` : ""}
+            </span>
+          </div>
+        ) : null}
         <div><b>{formatRupees(paid)}</b><span>Paid</span></div>
       </div>
       {!rows.length ? <section className="panel empty"><b>Nobody to pay</b>Add your team on the <Link href="/team">Team</Link> page.</section> : (
