@@ -9,7 +9,7 @@ import { todayInFactory } from "@/lib/dates";
 import { addDays, dayShort, isValidDay } from "@/lib/day";
 import { PAY_TYPE_LABEL, WEEKDAYS } from "@/lib/labels";
 import { formatRupees, paiseToInput } from "@/lib/money";
-import { lastPayday, nextPayday, payPeriod, paydayRows, recentAdvances, salaryRows, type PaydayRow } from "@/lib/pay-queries";
+import { lastPayday, nextPayday, openDaysFilled, payPeriod, paydayRows, recentAdvances, salaryRows, type PaydayRow } from "@/lib/pay-queries";
 import { getSettings, listWorkers } from "@/lib/setup-queries";
 import { deleteWagePayment, giveAdvance, payEveryone, paySalary, payWeekly } from "./actions";
 
@@ -66,8 +66,8 @@ function detail(r: PaydayRow, day: string) {
 }
 
 async function PaydayTab({ payday, next, today, day, weeklyOff }: { payday: string; next: string; today: string; day: string; weeklyOff: number | null }) {
-  const rows = await paydayRows(payday, weeklyOff);
-  const { firstDay, to } = payPeriod(payday, weeklyOff);
+  const { from, firstDay, to } = payPeriod(payday, weeklyOff);
+  const [rows, daysFilled] = await Promise.all([paydayRows(payday, weeklyOff), openDaysFilled(from, to < today ? to : today)]);
   const unpaid = rows.filter((r) => !r.paid && r.due > 0);
   const toPay = unpaid.reduce((a, r) => a + r.due, 0);
   const paid = rows.reduce((a, r) => a + (r.paid?.amountPaise ?? 0), 0);
@@ -77,7 +77,7 @@ async function PaydayTab({ payday, next, today, day, weeklyOff }: { payday: stri
   const dailyRows = rows.filter((r) => r.worker.payType === "daily");
   const dailyUnpaid = dailyRows.filter((r) => !r.paid);
   const dailyOwed = dailyUnpaid.reduce((a, r) => a + r.due, 0);
-  const dailyDays = dailyUnpaid.reduce((a, r) => a + r.days, 0);
+  const dailyPeople = dailyUnpaid.filter((r) => r.due > 0).length;
   const dailyAdvances = dailyUnpaid.reduce((a, r) => a + Math.min(r.advances, r.earned), 0);
   const weekOpen = to >= today; // the work week hasn't finished yet
   const groups = (["daily", "piece", "salary"] as const).map((k) => ({ k, rows: rows.filter((r) => r.worker.payType === k) })).filter((g) => g.rows.length);
@@ -96,7 +96,8 @@ async function PaydayTab({ payday, next, today, day, weeklyOff }: { payday: stri
           <div className="hero">
             <b>{formatRupees(dailyOwed)}</b>
             <span>
-              Owed to daily workers{weekOpen ? " so far this week" : ""}: {dailyDays % 1 ? dailyDays.toFixed(1) : dailyDays} {dailyDays === 1 ? "day" : "days"} worked
+              Owed to daily workers{weekOpen ? " so far this week" : ""}: {dailyPeople} {dailyPeople === 1 ? "person" : "people"}
+              {weekOpen ? `, ${daysFilled} ${daysFilled === 1 ? "day" : "days"} filled in` : ""}
               {dailyAdvances ? `, less ${formatRupees(dailyAdvances)} advance` : ""}
               {dailyUnpaid.length < dailyRows.length ? `, ${dailyRows.length - dailyUnpaid.length} already paid` : ""}
             </span>

@@ -1,7 +1,7 @@
 import "server-only";
 import { and, asc, desc, eq, gte, isNotNull, lte, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { attendance, wagePayments, workEntries, workers } from "@/db/schema";
+import { attendance, daySheets, wagePayments, workEntries, workers } from "@/db/schema";
 import { addDays, isWorkDay, weekdayOf } from "@/lib/day";
 
 /* ------------------------------------------------------------ paydays */
@@ -42,6 +42,14 @@ export type PaydayRow = {
 // Daily wage: days present (half days count 0.5) × rate. Per piece: every good piece logged
 // against them at any stage × rate. Advances given that week come off. Salaried staff get their
 // fixed weekly payout, and their advances come off the month-end salary instead.
+// How many days in a range have a saved daily sheet with the factory open.
+export async function openDaysFilled(from: string, to: string): Promise<number> {
+  if (from > to) return 0;
+  const [r] = await db.select({ n: sql<number>`count(*)::int` }).from(daySheets)
+    .where(and(gte(daySheets.day, from), lte(daySheets.day, to), eq(daySheets.closed, false)));
+  return r?.n ?? 0;
+}
+
 export async function paydayRows(payday: string, weeklyOff: number | null): Promise<PaydayRow[]> {
   const { from, to } = payPeriod(payday, weeklyOff);
   const [ws, att, pieces, adv, paid] = await Promise.all([
