@@ -33,7 +33,7 @@ export function CustomerLink({ o }: { o: OrderView }) {
 // What the edit form starts with for an existing order.
 export function initialOf(o: OrderView): OrderInitial {
   return {
-    id: o.id, customer: o.customer, phone: o.phone ?? "", dueOn: o.dueOn, notes: o.notes ?? "",
+    id: o.id, customer: o.customer, phone: o.phone ?? "", orderedOn: o.orderedOn, dueOn: o.dueOn, notes: o.notes ?? "",
     locationType: o.locationType, locationCode: o.locationCode ?? "", locationNote: o.locationNote ?? "",
     lines: o.lines.map((l) => ({ ballTypeId: l.ballTypeId, gradeId: l.gradeId, qty: l.qty, price: paiseToInput(l.pricePaise) })),
   };
@@ -94,6 +94,7 @@ export function OrderDetails({ o, names, owner }: { o: OrderView; names: Names; 
   return (
     <InfoDialog title={o.customer} trigger="View">
       <dl className="kv">
+        <dt>Ordered</dt><dd>{dayShort(o.orderedOn)}</dd>
         <dt>Due</dt><dd>{dayShort(o.dueOn)}</dd>
         <dt>Location</dt><dd>{o.locationType ? <>{placeName(o.locationType, o.locationCode)} <span className="muted">({LOCATION_TYPE_LABEL[o.locationType]})</span>{o.locationNote ? <><br /><span className="muted">{o.locationNote}</span></> : null}</> : <span className="muted">Not set</span>}</dd>
         <dt>Status</dt><dd>{o.status === "closed" ? "Delivered" : "Open"}</dd>

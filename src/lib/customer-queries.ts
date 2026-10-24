@@ -16,7 +16,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // One row per order with its delivered balls and value, payments and what's owed on it.
 const PER_ORDER = sql`
   per_order as (
-    select o.id, o.customer_id, o.status, o.created_at,
+    select o.id, o.customer_id, o.status, o.ordered_on,
            coalesce(dv.balls, 0) as balls, coalesce(dv.value, 0) as value, coalesce(rc.amt, 0) as received,
            greatest(coalesce(dv.value, 0) - coalesce(rc.amt, 0), 0) as owed
       from orders o
@@ -26,7 +26,7 @@ const PER_ORDER = sql`
   ),
   last_loc as (
     select distinct on (customer_id) customer_id, location_type, location_code, location_note
-      from orders where location_type is not null order by customer_id, created_at desc
+      from orders where location_type is not null order by customer_id, ordered_on desc, created_at desc
   )`;
 
 export type CustomerSort = "name" | "owes" | "bought" | "recent";
@@ -75,7 +75,7 @@ export async function customerList(search: string, sort: CustomerSort, page: unk
                count(po.id)::int as orders, (count(po.id) filter (where po.status = 'open'))::int as open,
                coalesce(sum(po.balls), 0) as balls, coalesce(sum(po.value), 0) as bought,
                coalesce(sum(po.received), 0) as received, coalesce(sum(po.owed), 0) as owed,
-               (max(po.created_at) at time zone 'Asia/Kolkata')::date::text as last_order,
+               max(po.ordered_on)::text as last_order,
                ll.location_type, ll.location_code
           from customers c
           left join per_order po on po.customer_id = c.id
@@ -111,14 +111,14 @@ export async function customerDetail(id: string, orderPage: unknown, paymentPage
       select count(*)::int as orders, (count(*) filter (where status = 'open'))::int as open,
              coalesce(sum(balls), 0) as balls, coalesce(sum(value), 0) as bought,
              coalesce(sum(received), 0) as received, coalesce(sum(owed), 0) as owed,
-             (min(created_at) at time zone 'Asia/Kolkata')::date::text as first
+             min(ordered_on)::text as first
         from per_order where customer_id = ${id}`),
     db.execute<{ t: LocationType; code: string; orders: number; last: string; note: string | null }>(sql`
       select location_type as t, location_code as code, count(*)::int as orders,
-             (max(created_at) at time zone 'Asia/Kolkata')::date::text as last,
-             (array_agg(location_note order by created_at desc) filter (where location_note is not null))[1] as note
+             max(ordered_on)::text as last,
+             (array_agg(location_note order by ordered_on desc, created_at desc) filter (where location_note is not null))[1] as note
         from orders where customer_id = ${id} and location_type is not null
-       group by location_type, location_code order by max(created_at) desc`),
+       group by location_type, location_code order by max(ordered_on) desc`),
     db.execute<{ ball_type_id: string; grade_id: string; balls: string; value: string; last: string }>(sql`
       select l.ball_type_id, l.grade_id, sum(l.qty) as balls, sum(l.qty * l.price_paise) as value, max(d.delivered_on)::text as last
         from deliveries d join delivery_lines l on l.delivery_id = d.id join orders o on o.id = d.order_id
@@ -127,7 +127,7 @@ export async function customerDetail(id: string, orderPage: unknown, paymentPage
     // Indian financial years (April to March), keyed by the year they start in
     db.execute<{ fy: number; orders: string; balls: string; sales: string; received: string }>(sql`
       select fy, sum(orders) as orders, sum(balls) as balls, sum(sales) as sales, sum(received) as received from (
-        select extract(year from ((o.created_at at time zone 'Asia/Kolkata')::date - interval '3 months'))::int as fy, 1 as orders, 0 as balls, 0 as sales, 0 as received
+        select extract(year from (o.ordered_on - interval '3 months'))::int as fy, 1 as orders, 0 as balls, 0 as sales, 0 as received
           from orders o where o.customer_id = ${id}
         union all
         select extract(year from (d.delivered_on - interval '3 months'))::int, 0, l.qty, l.qty * l.price_paise, 0
@@ -144,12 +144,12 @@ export async function customerDetail(id: string, orderPage: unknown, paymentPage
   const pp = paging(paymentPage, payCount.rows[0]?.n ?? 0);
   const [orderIds, payments] = await Promise.all([
     op.total
-      ? db.execute<{ id: string }>(sql`select id from orders where customer_id = ${id} order by created_at desc, id desc limit ${op.size} offset ${op.offset}`)
+      ? db.execute<{ id: string }>(sql`select id from orders where customer_id = ${id} order by ordered_on desc, created_at desc, id desc limit ${op.size} offset ${op.offset}`)
       : Promise.resolve({ rows: [] as { id: string }[] }),
     pp.total
       ? db.execute<{ id: string; received_on: string; amount: string; mode: "cash" | "online"; note: string | null; order_id: string; order_on: string }>(sql`
           select r.id, r.received_on::text as received_on, r.amount_paise as amount, r.mode, r.note, o.id as order_id,
-                 (o.created_at at time zone 'Asia/Kolkata')::date::text as order_on
+                 o.ordered_on::text as order_on
             from receipts r join orders o on o.id = r.order_id
            where o.customer_id = ${id}
            order by r.received_on desc, r.created_at desc, r.id desc limit ${pp.size} offset ${pp.offset}`)

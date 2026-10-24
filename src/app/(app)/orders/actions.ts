@@ -32,6 +32,7 @@ const orderSchema = z.object({
   id: z.uuid().nullable(),
   customer: z.string().trim().min(1, "Enter the customer's name.").max(120),
   phone: z.string().trim().max(30),
+  orderedOn: z.iso.date("Pick the date the order was placed."),
   dueOn: z.iso.date("Pick a due date."),
   notes: z.string().trim().max(500),
   locationType: z.enum(["domestic", "international"], "Choose whether the order is domestic or international."),
@@ -72,9 +73,10 @@ export async function saveOrder(input: unknown): Promise<ActionResult> {
     if (existing.deliveries.length && Object.entries(newOrdered).every(([k, q]) => q <= (existing.delivered[k] ?? 0))) status = "closed";
   }
 
+  if (v.orderedOn > (await todayInFactory())) return fail("The order date can't be in the future.");
   const customerId = await findOrCreateCustomer(v.customer, v.phone, userId);
   const id = v.id ?? crypto.randomUUID();
-  const fields = { customerId, dueOn: v.dueOn, notes: v.notes || null, status, locationType: v.locationType, locationCode: v.locationCode, locationNote: v.locationNote || null };
+  const fields = { customerId, orderedOn: v.orderedOn, dueOn: v.dueOn, notes: v.notes || null, status, locationType: v.locationType, locationCode: v.locationCode, locationNote: v.locationNote || null };
   await batch([
     v.id ? db.update(orders).set(fields).where(eq(orders.id, id)) : db.insert(orders).values({ id, ...fields, createdBy: userId }),
     db.delete(orderLines).where(eq(orderLines.orderId, id)),

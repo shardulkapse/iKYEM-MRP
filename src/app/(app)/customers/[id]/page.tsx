@@ -103,7 +103,7 @@ async function Customer({ params, searchParams }: { params: PageProps<"/customer
                   <tbody>
                     {data.orders.map((o) => (
                       <tr key={o.id}>
-                        <td className="nw">{dayShort(indiaDate(o.createdAt))}</td>
+                        <td className="nw">{dayShort(o.orderedOn)}</td>
                         <td className="nw">{dayShort(o.dueOn)}</td>
                         <td className="num">{o.ballsOrdered}{o.ballsDelivered && o.ballsDelivered !== o.ballsOrdered ? <><br /><small className="muted">{o.ballsDelivered} sent</small></> : null}</td>
                         <td className="num">{formatRupees(o.valuePaise)}</td>
@@ -195,9 +195,6 @@ async function Customer({ params, searchParams }: { params: PageProps<"/customer
     </>
   );
 }
-
-// The date an order was entered, in India (its timestamp is stored in UTC).
-const indiaDate = (iso: string) => new Date(iso).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
 
 // Keeps the other list's page in the address when moving through this one.
 function withOther(path: string, param: string, value: string | string[] | undefined) {

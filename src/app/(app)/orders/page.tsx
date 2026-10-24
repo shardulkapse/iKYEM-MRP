@@ -45,6 +45,7 @@ async function OrdersBody({ searchParams }: { searchParams: PageProps<"/orders">
     usedCountries: data.usedCountries,
     ready: data.ready,
     defaultDue: addDays(today, 14),
+    today,
   };
   const canOrder = data.types.length > 0 && data.grades.length > 0;
 
@@ -93,7 +94,7 @@ function OpenTab({ orders, check, inProduction, names, today, owner, ready, form
     <>
     <div className="tbl card">
       <table>
-        <thead><tr><th>Customer</th><th>Due</th><th>Balls</th><th className="num">Value</th><th className="num">Paid</th><th>Stock</th><th /></tr></thead>
+        <thead><tr><th>Customer</th><th>Ordered</th><th>Due</th><th>Balls</th><th className="num">Value</th><th className="num">Paid</th><th>Stock</th><th /></tr></thead>
         <tbody>
           {pageOf(orders, p).map((o) => {
             const c = check[o.id];
@@ -106,6 +107,7 @@ function OpenTab({ orders, check, inProduction, names, today, owner, ready, form
             return (
               <tr key={o.id}>
                 <td><b><CustomerLink o={o} /></b>{o.phone ? <><br /><small className="muted">{o.phone}</small></> : null}<LocationLine o={o} />{o.notes ? <><br /><small className="muted">{o.notes}</small></> : null}</td>
+                <td className="nw">{dayShort(o.orderedOn)}</td>
                 <td className={`nw ${o.dueOn < today ? "bad" : ""}`}>{dayShort(o.dueOn)}<br /><small className="muted">{dueText(o.dueOn, today)}</small></td>
                 <td style={{ fontSize: 13.5 }}>
                   {o.lines.map((l) => {
@@ -233,7 +235,7 @@ async function DoneTab({ names, today, owner, kind, ref_, loc, places, page, for
                 <tr key={o.id}>
                   <td><b><CustomerLink o={o} /></b></td>
                   <td>{o.locationType ? <>{placeName(o.locationType, o.locationCode)}<br /><small className="muted">{LOCATION_TYPE_LABEL[o.locationType]}{o.locationNote ? `, ${o.locationNote}` : ""}</small></> : <span className="muted">Not set</span>}</td>
-                  <td className="nw">{o.lastDelivery ? dayShort(o.lastDelivery) : "—"}</td>
+                  <td className="nw">{o.lastDelivery ? dayShort(o.lastDelivery) : "—"}<br /><small className="muted">Ordered {dayShort(o.orderedOn)}</small></td>
                   <td className="num">{o.ballsDelivered}</td>
                   <td className="num">{formatRupees(o.deliveredValuePaise)}</td>
                   <td>{o.owedPaise === 0 ? <span className="chip done">Paid</span> : <span className={`chip ${o.receivedPaise ? "progress" : "bad"}`}>{formatRupees(o.owedPaise)} owed</span>}</td>

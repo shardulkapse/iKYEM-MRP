@@ -8,7 +8,7 @@ import { deleteOrder, saveOrder } from "./actions";
 type Opt = { id: string; name: string; colour?: string };
 type Line = { key: number; ballTypeId: string; gradeId: string; qty: string; price: string };
 export type OrderInitial = {
-  id: string; customer: string; phone: string; dueOn: string; notes: string;
+  id: string; customer: string; phone: string; orderedOn: string; dueOn: string; notes: string;
   locationType: LocationType | null; locationCode: string; locationNote: string;
   lines: { ballTypeId: string; gradeId: string; qty: number; price: string }[];
 };
@@ -26,6 +26,7 @@ type Props = {
   usedCountries: string[]; // country codes already on orders, offered first
   ready: Record<string, number>;
   defaultDue: string;
+  today: string; // default and latest "ordered on" date
 };
 
 let seq = 0;
@@ -43,10 +44,11 @@ export function OrderDialog(props: Props) {
   );
 }
 
-function OrderForm({ title, initial, delivered = {}, canDelete, types, grades, customers, usedCountries, ready, defaultDue, close }: Props & { close: () => void }) {
+function OrderForm({ title, initial, delivered = {}, canDelete, types, grades, customers, usedCountries, ready, defaultDue, today, close }: Props & { close: () => void }) {
   const firstLine = (): Line => ({ key: seq++, ballTypeId: types[0]?.id ?? "", gradeId: grades[0]?.id ?? "", qty: "100", price: "" });
   const [customer, setCustomer] = useState(initial?.customer ?? "");
   const [phone, setPhone] = useState(initial?.phone ?? "");
+  const [orderedOn, setOrderedOn] = useState(initial?.orderedOn ?? today);
   const [dueOn, setDueOn] = useState(initial?.dueOn ?? defaultDue);
   const [notes, setNotes] = useState(initial?.notes ?? "");
   const [locType, setLocType] = useState<LocationType | "">(initial?.locationType ?? "");
@@ -79,7 +81,7 @@ function OrderForm({ title, initial, delivered = {}, canDelete, types, grades, c
     setError(null);
     start(async () => {
       const res = await saveOrder({
-        id: initial?.id ?? null, customer, phone, dueOn, notes, locationType: locType, locationCode: locCode, locationNote: locNote,
+        id: initial?.id ?? null, customer, phone, orderedOn, dueOn, notes, locationType: locType, locationCode: locCode, locationNote: locNote,
         lines: lines.map((l) => ({ ballTypeId: l.ballTypeId, gradeId: l.gradeId, qty: Number(l.qty), price: l.price })),
       });
       if (res.ok) close();
@@ -100,12 +102,13 @@ function OrderForm({ title, initial, delivered = {}, canDelete, types, grades, c
     <form onSubmit={submit}>
       <header className="dlg-head"><h3>{title}</h3><button type="button" className="x" onClick={close} aria-label="Close">✕</button></header>
       <div className="dlg-body">
-        <label className="fld full"><span>Customer</span>
+        <label className="fld"><span>Customer</span>
           <input list="customer-names" value={customer} onChange={(e) => pickCustomer(e.target.value)} required placeholder="Club, dealer or academy" autoComplete="off" />
           <datalist id="customer-names">{customers.map((c) => <option key={c.name} value={c.name} />)}</datalist>
           <small className="hint">Pick an existing customer or type a new name.</small>
         </label>
         <label className="fld"><span>Phone (optional)</span><input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} /></label>
+        <label className="fld"><span>Ordered on</span><input type="date" value={orderedOn} max={today} onChange={(e) => setOrderedOn(e.target.value)} required /></label>
         <label className="fld"><span>Due date</span><input type="date" value={dueOn} onChange={(e) => setDueOn(e.target.value)} required /></label>
 
         <div className="fld">

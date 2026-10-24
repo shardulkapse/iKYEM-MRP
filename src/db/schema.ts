@@ -239,6 +239,7 @@ export const locationType = pgEnum("location_type", ["domestic", "international"
 export const orders = pgTable("orders", {
   id: uuid("id").primaryKey().defaultRandom(),
   customerId: uuid("customer_id").notNull().references(() => customers.id),
+  orderedOn: date("ordered_on", { mode: "string" }).notNull().default(sql`current_date`), // when the customer placed it (editable; set from the form)
   dueOn: date("due_on", { mode: "string" }).notNull(),
   status: orderStatus("status").notNull().default("open"),
   notes: text("notes"),

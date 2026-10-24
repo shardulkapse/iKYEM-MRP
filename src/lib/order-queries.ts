@@ -9,7 +9,7 @@ import { activeTypesAndGrades, readyStockByTypeAndGrade, wipByTypeAndBuffer } fr
 export const lineKey = (ballTypeId: string, gradeId: string) => `${ballTypeId}|${gradeId}`;
 
 export type OrderView = {
-  id: string; customerId: string; customer: string; phone: string | null; dueOn: string; status: "open" | "closed"; notes: string | null; createdAt: string;
+  id: string; customerId: string; customer: string; phone: string | null; orderedOn: string; dueOn: string; status: "open" | "closed"; notes: string | null; createdAt: string;
   locationType: LocationType | null; locationCode: string | null; locationNote: string | null;
   lines: { id: string; ballTypeId: string; gradeId: string; qty: number; pricePaise: number }[];
   ordered: Record<string, number>; delivered: Record<string, number>; remaining: Record<string, number>;
@@ -60,7 +60,7 @@ export async function loadOrders(ids: string[]): Promise<OrderView[]> {
     const receivedPaise = recs.reduce((a, r) => a + r.amountPaise, 0);
     const c = customerById.get(o.customerId);
     return {
-      id: o.id, customerId: o.customerId, customer: c?.name ?? "(removed customer)", phone: c?.phone ?? null, dueOn: o.dueOn, status: o.status, notes: o.notes,
+      id: o.id, customerId: o.customerId, customer: c?.name ?? "(removed customer)", phone: c?.phone ?? null, orderedOn: o.orderedOn, dueOn: o.dueOn, status: o.status, notes: o.notes,
       locationType: o.locationType, locationCode: o.locationCode, locationNote: o.locationNote,
       createdAt: o.createdAt.toISOString(),
       lines, ordered, delivered, remaining, deliveries: dels, receipts: recs,
@@ -122,7 +122,7 @@ export async function ordersPageData() {
     // each customer's latest location, to fill in when they order again
     db.execute<{ customer_id: string; location_type: LocationType; location_code: string }>(sql`
       select distinct on (customer_id) customer_id, location_type, location_code from orders
-       where location_type is not null order by customer_id, created_at desc`),
+       where location_type is not null order by customer_id, ordered_on desc, created_at desc`),
     db.execute<{ code: string }>(sql`select distinct location_code as code from orders where location_type = 'international'`),
   ]);
   const loaded = await loadOrders([...new Set([...openIds, ...owingIds])]);
