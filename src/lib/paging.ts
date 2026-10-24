@@ -18,8 +18,9 @@ export function paging(param: unknown, total: number, size = PAGE_SIZE): Paging 
 // One page of a list that is already in memory.
 export const pageOf = <T,>(rows: T[], p: Paging): T[] => rows.slice(p.offset, p.offset + p.size);
 
-// Adds ?page=N (or &page=N) to a link, leaving page 1 as the plain address.
-export function withPage(href: string, page: number): string {
+// Adds ?page=N (or &page=N) to a link, leaving page 1 as the plain address. A screen with two
+// paged lists gives the second its own name (e.g. "ppage") so each keeps its place.
+export function withPage(href: string, page: number, param = "page"): string {
   if (page <= 1) return href;
-  return `${href}${href.includes("?") ? "&" : "?"}page=${page}`;
+  return `${href}${href.includes("?") ? "&" : "?"}${param}=${page}`;
 }

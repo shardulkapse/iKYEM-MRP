@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import "./select-nav.css";
 
 export type NavChoice = { value: string; label: string; href: string };
 export type NavGroup = { group?: string; choices: NavChoice[] };

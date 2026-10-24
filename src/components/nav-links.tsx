@@ -17,7 +17,7 @@ export function NavLinks({ role, variant }: { role: Role | null; variant: "side"
       {items.map((n) => (
         <Link key={n.href} href={n.href} aria-current={isActive(path, n.href) ? "page" : undefined} className={variant === "side" && n.href === "/setup" ? "minor" : undefined}>
           <Icon name={n.icon} />
-          {variant === "side" ? n.label : <span>{n.label}</span>}
+          {variant === "side" ? n.label : <span>{n.short ?? n.label}</span>}
         </Link>
       ))}
     </>

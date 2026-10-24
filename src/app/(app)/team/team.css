@@ -1,17 +1,10 @@
 /* Team screens. Imported by src/app/(app)/team/page.tsx and team/[id]/page.tsx. */
 @layer theme, base, components, utilities; /* fixes layer order whichever stylesheet loads first */
 @layer components {
-  .back { display: inline-block; margin-bottom: 10px; color: var(--muted); font-size: 14px; font-weight: 560; text-decoration: none; }
-  .back:hover { color: var(--ink); }
 
   .pickers { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
   .pickers .spacer { flex: 1; }
-  .selnav { display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; color: var(--muted); font-weight: 600; }
-  .selnav select { height: 40px; min-width: 240px; max-width: 100%; border: 1px solid var(--line2); background: var(--panel); border-radius: 10px; padding: 0 11px; font: inherit; font-size: 14.5px; font-weight: 560; color: var(--ink); cursor: pointer; }
-  .selnav select:focus { outline: none; border-color: var(--field); box-shadow: 0 0 0 3px color-mix(in srgb, var(--field) 22%, transparent); }
 
-  a.who { color: var(--ink); font-weight: 680; text-decoration: none; }
-  a.who:hover { color: var(--field); text-decoration: underline; }
   .tbl td a:not(.btn):not(.chip):not(.who) { color: var(--field); font-weight: 600; text-decoration: none; }
   .tbl td a:not(.btn):not(.chip):not(.who):hover { text-decoration: underline; }
   .tbl tfoot td { font-weight: 680; background: var(--panel2); border-top: 1px solid var(--line); border-bottom: 0; }
@@ -33,7 +26,6 @@
   @media (max-width: 900px) {
     .pickers .spacer { display: none; }
     .pickers .selnav { flex: 1 1 180px; }
-    .selnav select { min-width: 0; width: 100%; }
     .worklines .t { min-width: 0; width: 100%; }
     .barcol { display: none; }
   }

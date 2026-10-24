@@ -1,11 +1,14 @@
 import type { Role } from "@/types/globals";
 
-export type NavItem = { href: string; label: string; icon: keyof typeof ICONS; roles: Role[] };
+// short: a shorter label for the phone tab bar, where eight tabs leave little room.
+export type NavItem = { href: string; label: string; short?: string; icon: keyof typeof ICONS; roles: Role[] };
 
 export const ICONS = {
   home: "M3 11l9-7 9 7v9a1 1 0 01-1 1h-5v-6H9v6H4a1 1 0 01-1-1z",
   today: "M3 5h18v16H3zM3 10h18M8 3v4M16 3v4M8 15h3",
   orders: "M5 4h14v16l-3-2-2 2-2-2-2 2-2-2-3 2zM9 9h6M9 13h6",
+  // a shop front: awning, walls, door
+  customers: "M4.5 11v9.5h15V11M3 9.5L5 4h14l2 5.5M3 9.5a3 3 0 006 0 3 3 0 006 0 3 3 0 006 0M10 20.5V15h4v5.5",
   stock: "M3 8l9-5 9 5v8l-9 5-9-5zM3 8l9 5 9-5M12 13v8",
   team: "M9 4.5a3.5 3.5 0 110 7 3.5 3.5 0 010-7zM2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5M16 4.5a3.5 3.5 0 010 7M18 14.8c1.8.8 3 2.6 3.5 5.2",
   pay: "M3 6.5h18v11H3zM12 9.5a2.5 2.5 0 110 5 2.5 2.5 0 010-5zM6.5 9.5v5M17.5 9.5v5",
@@ -20,6 +23,7 @@ export const NAV: NavItem[] = [
   { href: "/", label: "Home", icon: "home", roles: ["owner", "manager"] },
   { href: "/today", label: "Today", icon: "today", roles: ["owner", "manager"] },
   { href: "/orders", label: "Orders", icon: "orders", roles: ["owner", "manager"] },
+  { href: "/customers", label: "Customers", short: "Clients", icon: "customers", roles: ["owner", "manager"] },
   { href: "/stock", label: "Stock", icon: "stock", roles: ["owner", "manager"] },
   { href: "/team", label: "Team", icon: "team", roles: ["owner"] },
   { href: "/pay", label: "Pay", icon: "pay", roles: ["owner"] },

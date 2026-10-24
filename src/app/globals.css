@@ -38,6 +38,9 @@
     padding-top: env(safe-area-inset-top, 0px);
   }
   :focus-visible { outline: 2px solid var(--field); outline-offset: 2px; }
+  /* The open list of every dropdown: some browsers (Chrome on Windows) draw it white while the
+     text keeps the page's light colour in dark mode, so set both. */
+  select option, select optgroup { background-color: var(--panel); color: var(--ink); }
 }
 
 @layer components {
@@ -136,6 +139,14 @@
   details.more[open] summary::before { content: "▾ "; }
 
   /* dialogs and forms */
+  /* "‹ Team", "‹ Customers" above a detail page */
+  .back { display: inline-block; margin-bottom: 10px; color: var(--muted); font-size: 14px; font-weight: 560; text-decoration: none; }
+  .back:hover { color: var(--ink); }
+
+  /* A person's or customer's name that opens their page */
+  a.who { color: var(--ink); font-weight: 680; text-decoration: none; }
+  a.who:hover { color: var(--field); text-decoration: underline; }
+
   /* Page numbers under long lists (src/components/pager.tsx) */
   .pager { display: flex; justify-content: space-between; align-items: center; gap: 10px 16px; flex-wrap: wrap; margin-top: 12px; font-size: 13.5px; }
   .pager .pages { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }

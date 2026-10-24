@@ -1,0 +1,14 @@
+/* Customers screens. Imported by src/app/(app)/customers/page.tsx and customers/[id]/page.tsx. */
+@layer theme, base, components, utilities; /* fixes layer order whichever stylesheet loads first */
+@layer components {
+  .csearch { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+  .csearch form { display: flex; gap: 8px; flex: 1 1 320px; max-width: 520px; }
+  .csearch input[type="search"] { flex: 1; min-width: 0; height: 40px; border: 1px solid var(--line2); background: var(--panel); border-radius: 10px; padding: 0 12px; font: inherit; font-size: 14.5px; color: var(--ink); }
+  .csearch input[type="search"]:focus { outline: none; border-color: var(--field); box-shadow: 0 0 0 3px color-mix(in srgb, var(--field) 22%, transparent); }
+  .csearch .btn { height: 40px; }
+  .cnotes { white-space: pre-line; margin: -6px 0 16px; padding: 10px 14px; border-left: 3px solid var(--line2); color: var(--muted); font-size: 14px; max-width: 760px; }
+  @media (max-width: 900px) {
+    .csearch form { max-width: none; }
+    .csearch .selnav { flex: 1 1 100%; }
+  }
+}
